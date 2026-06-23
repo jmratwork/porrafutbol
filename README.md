@@ -183,3 +183,7 @@ npm run build
 ```
 
 Compila el cliente de Prisma y la aplicación Next.js sin errores de tipos.
+
+## Nota
+
+Este README está escrito en español debido a los potenciales usuarios que tienen la aplicación.
