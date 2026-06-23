@@ -1,0 +1,52 @@
+// Esquema de Prisma para la "Porra de fútbol".
+// Genera el cliente y se conecta a PostgreSQL mediante la variable DATABASE_URL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Estados del ciclo de vida de una porra.
+enum EstadoPorra {
+  ABIERTA
+  CERRADA
+  FINALIZADA
+}
+
+// Una única porra activa alrededor de un partido (local vs visitante).
+model Porra {
+  id              String      @id @default(cuid())
+  equipoLocal     String
+  equipoVisitante String
+  // Fecha y hora de inicio del partido (almacenado en UTC).
+  fechaPartido    DateTime
+  // Precio de la apuesta por persona, en euros.
+  precio          Float
+  estado          EstadoPorra @default(ABIERTA)
+
+  // Resultado real del partido (sólo cuando estado = FINALIZADA).
+  resultadoLocal      Int?
+  resultadoVisitante  Int?
+
+  apuestas  Apuesta[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Apuesta de un participante: nombre + marcador pronosticado.
+model Apuesta {
+  id              String   @id @default(cuid())
+  porraId         String
+  porra           Porra    @relation(fields: [porraId], references: [id], onDelete: Cascade)
+  nombre          String
+  golesLocal      Int
+  golesVisitante  Int
+  createdAt       DateTime @default(now())
+
+  @@index([porraId])
+}
