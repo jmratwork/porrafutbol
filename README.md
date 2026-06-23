@@ -96,17 +96,14 @@ Cualquiera de estas opciones funciona; copia su cadena de conexión en `DATABASE
 2. En **Settings → Environment Variables** añade:
    - `DATABASE_URL` (si usas Vercel Postgres se añade sola al crear la base de datos).
    - `ADMIN_PIN`.
-3. El **Build Command** por defecto (`npm run build`) ya ejecuta `prisma generate`.
-4. Aplica las migraciones a la base de datos de producción. Opciones:
-   - Desde tu máquina, con la `DATABASE_URL` de producción:
-     ```bash
-     npx prisma migrate deploy
-     ```
-   - O temporalmente cambia el Build Command en Vercel a:
-     ```bash
-     prisma generate && prisma migrate deploy && next build
-     ```
-5. Deploy. La app queda disponible en tu dominio de Vercel.
+3. **Deploy.** No hace falta configurar nada más: Vercel detecta el script
+   `vercel-build` del `package.json`, que ejecuta automáticamente
+   `prisma generate && prisma migrate deploy && next build`. Es decir, **las tablas se
+   crean solas** en la base de datos de producción en el primer despliegue.
+4. Abre tu dominio de Vercel, entra en `/admin`, introduce el `ADMIN_PIN` y crea la porra.
+
+> Si prefieres aplicar las migraciones manualmente, usa la `DATABASE_URL` de producción y
+> ejecuta `npx prisma migrate deploy` desde tu máquina.
 
 ---
 
