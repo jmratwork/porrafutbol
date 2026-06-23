@@ -9,7 +9,7 @@ Construida con **Next.js 14 (App Router) + TypeScript + Tailwind CSS** y persist
 
 ---
 
-## ✨ Funcionalidades
+## Funcionalidades
 
 - Una porra activa a la vez con estados **ABIERTA → CERRADA → FINALIZADA**.
 - Página pública `/`: cabecera tipo marcador, cuenta atrás, bote en vivo, formulario de
@@ -23,14 +23,14 @@ Construida con **Next.js 14 (App Router) + TypeScript + Tailwind CSS** y persist
 
 ---
 
-## 🧱 Requisitos
+## Requisitos
 
 - Node.js 18.18+ (recomendado 20+).
 - Una base de datos **PostgreSQL** (Vercel Postgres, Neon, Supabase o local).
 
 ---
 
-## 🚀 Puesta en marcha (local)
+## Puesta en marcha (local)
 
 ### 1. Instalar dependencias
 
@@ -75,7 +75,7 @@ Abre [http://localhost:3000](http://localhost:3000). Ve a `/admin`, introduce el
 
 ---
 
-## 🗄️ Crear una base de datos PostgreSQL gratis
+## Crear una base de datos PostgreSQL gratis
 
 Cualquiera de estas opciones funciona; copia su cadena de conexión en `DATABASE_URL`.
 
@@ -90,7 +90,7 @@ Cualquiera de estas opciones funciona; copia su cadena de conexión en `DATABASE
 
 ---
 
-## ☁️ Despliegue en Vercel
+## Despliegue en Vercel
 
 1. Sube el repositorio a GitHub/GitLab e impórtalo en [vercel.com](https://vercel.com).
 2. En **Settings → Environment Variables** añade:
@@ -107,7 +107,7 @@ Cualquiera de estas opciones funciona; copia su cadena de conexión en `DATABASE
 
 ---
 
-## 📡 API
+## API
 
 | Método | Ruta            | Descripción                                            | PIN |
 | ------ | --------------- | ------------------------------------------------------ | --- |
@@ -122,7 +122,7 @@ la API responde **401**. Si la porra está completa o cerrada al apostar, respon
 
 ---
 
-## 🏆 Cálculo del ganador (con ejemplos)
+## Cálculo del ganador (con ejemplos)
 
 Sea el **resultado real** `LR - VR` y cada apuesta `LA - VA`.
 
@@ -151,7 +151,7 @@ La lógica está en [`lib/porra.ts`](lib/porra.ts).
 
 ---
 
-## 📂 Estructura
+## Estructura
 
 ```
 app/
@@ -176,7 +176,7 @@ prisma/
 
 ---
 
-## 🧪 Verificar el build
+## Verificar el build
 
 ```bash
 npm run build
