@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Toast, type ToastData } from "@/components/Toast";
 import { formatearEuros, formatearFecha } from "@/lib/format";
-import { MAX_GOLES, type EstadoActualDTO } from "@/lib/types";
+import { MAX_APOSTANTES, MAX_GOLES, type EstadoActualDTO } from "@/lib/types";
 
 const PIN_STORAGE_KEY = "porra_admin_pin";
 
@@ -73,7 +73,7 @@ export default function AdminPage() {
   if (cargando) {
     return (
       <main className="mx-auto flex min-h-screen max-w-2xl items-center justify-center p-6">
-        <p className="animate-pulse text-cesped-700">Cargando…</p>
+        <p className="animate-pulse text-cesped-300">Cargando…</p>
       </main>
     );
   }
@@ -83,15 +83,15 @@ export default function AdminPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 pb-16 pt-6 sm:pt-10">
       <header className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-black text-cesped-800">⚙️ Administración</h1>
-        <a href="/" className="text-sm text-cesped-700 underline">
+        <h1 className="text-2xl font-black text-white">⚙️ Administración</h1>
+        <a href="/" className="text-sm text-cesped-300 underline transition hover:text-cesped-200">
           Ver porra
         </a>
       </header>
 
       {/* PIN */}
-      <section className="mb-6 rounded-2xl bg-white p-5 shadow">
-        <label htmlFor="pin" className="mb-1 block text-sm font-medium text-slate-700">
+      <section className="mb-6 card p-5">
+        <label htmlFor="pin" className="label">
           PIN de administración
         </label>
         <input
@@ -101,20 +101,17 @@ export default function AdminPage() {
           onChange={(e) => setPin(e.target.value)}
           placeholder="Introduce el PIN"
           autoComplete="current-password"
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-cesped-600"
+          className="input"
         />
-        <p className="mt-1 text-xs text-slate-500">
-          Se valida contra la variable de entorno <code>ADMIN_PIN</code>. Necesario para todas las
-          acciones.
+        <p className="mt-2 text-xs text-slate-400">
+          Se valida contra la variable de entorno{" "}
+          <code className="rounded bg-white/10 px-1 py-0.5 text-slate-200">ADMIN_PIN</code>.
+          Necesario para todas las acciones.
         </p>
       </section>
 
       {porra ? (
-        <GestionPorra
-          estado={estado!}
-          trabajando={trabajando}
-          peticion={peticion}
-        />
+        <GestionPorra estado={estado!} trabajando={trabajando} peticion={peticion} />
       ) : (
         <CrearPorra trabajando={trabajando} peticion={peticion} />
       )}
@@ -153,11 +150,11 @@ function CrearPorra({ trabajando, peticion }: { trabajando: boolean; peticion: P
   };
 
   return (
-    <section className="rounded-2xl bg-white p-5 shadow sm:p-6">
-      <h2 className="mb-4 text-lg font-bold text-cesped-800">Crear porra</h2>
+    <section className="card p-5 sm:p-6">
+      <h2 className="mb-4 text-lg font-bold text-white">Crear porra</h2>
       <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
         <div>
-          <label htmlFor="local" className="mb-1 block text-sm font-medium text-slate-700">
+          <label htmlFor="local" className="label">
             Equipo local
           </label>
           <input
@@ -167,11 +164,11 @@ function CrearPorra({ trabajando, peticion }: { trabajando: boolean; peticion: P
             maxLength={40}
             value={equipoLocal}
             onChange={(e) => setEquipoLocal(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-cesped-600"
+            className="input"
           />
         </div>
         <div>
-          <label htmlFor="visitante" className="mb-1 block text-sm font-medium text-slate-700">
+          <label htmlFor="visitante" className="label">
             Equipo visitante
           </label>
           <input
@@ -181,11 +178,11 @@ function CrearPorra({ trabajando, peticion }: { trabajando: boolean; peticion: P
             maxLength={40}
             value={equipoVisitante}
             onChange={(e) => setEquipoVisitante(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-cesped-600"
+            className="input"
           />
         </div>
         <div>
-          <label htmlFor="fecha" className="mb-1 block text-sm font-medium text-slate-700">
+          <label htmlFor="fecha" className="label">
             Fecha y hora del partido
           </label>
           <input
@@ -194,11 +191,11 @@ function CrearPorra({ trabajando, peticion }: { trabajando: boolean; peticion: P
             required
             value={fecha}
             onChange={(e) => setFecha(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-cesped-600"
+            className="input [color-scheme:dark]"
           />
         </div>
         <div>
-          <label htmlFor="precio" className="mb-1 block text-sm font-medium text-slate-700">
+          <label htmlFor="precio" className="label">
             Precio de la apuesta (€)
           </label>
           <input
@@ -209,14 +206,10 @@ function CrearPorra({ trabajando, peticion }: { trabajando: boolean; peticion: P
             step={0.01}
             value={precio}
             onChange={(e) => setPrecio(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-cesped-600"
+            className="input"
           />
         </div>
-        <button
-          type="submit"
-          disabled={trabajando}
-          className="rounded-lg bg-cesped-600 px-4 py-3 font-bold text-white shadow hover:bg-cesped-700 disabled:opacity-60"
-        >
+        <button type="submit" disabled={trabajando} className="btn-primary w-full">
           {trabajando ? "Creando…" : "Crear porra"}
         </button>
       </form>
@@ -260,40 +253,42 @@ function GestionPorra({
   return (
     <div className="flex flex-col gap-6">
       {/* Resumen */}
-      <section className="rounded-2xl bg-white p-5 shadow">
-        <h2 className="mb-2 text-lg font-bold text-cesped-800">
-          {porra.equipoLocal} vs {porra.equipoVisitante}
+      <section className="card p-5">
+        <h2 className="mb-3 text-lg font-bold text-white">
+          {porra.equipoLocal} <span className="text-slate-500">vs</span> {porra.equipoVisitante}
         </h2>
-        <dl className="grid grid-cols-2 gap-2 text-sm">
-          <dt className="text-slate-500">Estado</dt>
-          <dd className="text-right font-semibold">{porra.estado}</dd>
-          <dt className="text-slate-500">Fecha</dt>
-          <dd className="text-right">{formatearFecha(porra.fechaPartido)}</dd>
-          <dt className="text-slate-500">Precio</dt>
-          <dd className="text-right">{formatearEuros(porra.precio)}</dd>
-          <dt className="text-slate-500">Apuestas</dt>
-          <dd className="text-right">{estado.numApuestas}/20</dd>
-          <dt className="text-slate-500">Bote</dt>
-          <dd className="text-right font-bold text-cesped-700">{formatearEuros(estado.bote)}</dd>
+        <dl className="grid grid-cols-2 gap-y-2 text-sm">
+          <dt className="text-slate-400">Estado</dt>
+          <dd className="text-right font-semibold text-slate-100">{porra.estado}</dd>
+          <dt className="text-slate-400">Fecha</dt>
+          <dd className="text-right text-slate-100">{formatearFecha(porra.fechaPartido)}</dd>
+          <dt className="text-slate-400">Precio</dt>
+          <dd className="text-right text-slate-100">{formatearEuros(porra.precio)}</dd>
+          <dt className="text-slate-400">Apuestas</dt>
+          <dd className="text-right text-slate-100">
+            {estado.numApuestas}/{MAX_APOSTANTES}
+          </dd>
+          <dt className="text-slate-400">Bote</dt>
+          <dd className="text-right font-bold text-cesped-300">{formatearEuros(estado.bote)}</dd>
         </dl>
       </section>
 
       {/* Abrir / Cerrar */}
       {porra.estado !== "FINALIZADA" && (
-        <section className="rounded-2xl bg-white p-5 shadow">
-          <h3 className="mb-3 font-bold text-cesped-800">Apuestas</h3>
+        <section className="card p-5">
+          <h3 className="mb-3 font-bold text-white">Apuestas</h3>
           <div className="flex gap-3">
             <button
               disabled={trabajando || porra.estado === "ABIERTA"}
               onClick={() => peticion("PATCH", { accion: "ABRIR" }, "Apuestas abiertas.")}
-              className="flex-1 rounded-lg bg-cesped-600 px-4 py-2 font-semibold text-white hover:bg-cesped-700 disabled:opacity-40"
+              className="btn-primary flex-1 py-2"
             >
               Abrir
             </button>
             <button
               disabled={trabajando || porra.estado === "CERRADA"}
               onClick={() => peticion("PATCH", { accion: "CERRAR" }, "Apuestas cerradas.")}
-              className="flex-1 rounded-lg bg-amber-500 px-4 py-2 font-semibold text-white hover:bg-amber-600 disabled:opacity-40"
+              className="btn-amber flex-1 py-2"
             >
               Cerrar
             </button>
@@ -303,12 +298,12 @@ function GestionPorra({
 
       {/* Finalizar con resultado */}
       {porra.estado !== "FINALIZADA" ? (
-        <section className="rounded-2xl bg-white p-5 shadow">
-          <h3 className="mb-3 font-bold text-cesped-800">Introducir resultado y finalizar</h3>
+        <section className="card p-5">
+          <h3 className="mb-3 font-bold text-white">Introducir resultado y finalizar</h3>
           <form onSubmit={finalizar} className="flex flex-col gap-4" noValidate>
             <div className="flex items-end gap-3">
               <div className="flex-1">
-                <label htmlFor="resLocal" className="mb-1 block text-xs text-slate-500">
+                <label htmlFor="resLocal" className="mb-1 block text-xs text-slate-400">
                   {porra.equipoLocal}
                 </label>
                 <input
@@ -320,12 +315,12 @@ function GestionPorra({
                   step={1}
                   value={resLocal}
                   onChange={(e) => setResLocal(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-center text-lg font-bold focus:border-cesped-600"
+                  className="input-score"
                 />
               </div>
-              <span className="mb-2 text-xl font-black text-slate-400">-</span>
+              <span className="mb-2 text-2xl font-black text-cesped-400">-</span>
               <div className="flex-1">
-                <label htmlFor="resVisitante" className="mb-1 block text-xs text-slate-500">
+                <label htmlFor="resVisitante" className="mb-1 block text-xs text-slate-400">
                   {porra.equipoVisitante}
                 </label>
                 <input
@@ -337,43 +332,42 @@ function GestionPorra({
                   step={1}
                   value={resVisitante}
                   onChange={(e) => setResVisitante(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-center text-lg font-bold focus:border-cesped-600"
+                  className="input-score"
                 />
               </div>
             </div>
-            <button
-              type="submit"
-              disabled={trabajando}
-              className="rounded-lg bg-cesped-700 px-4 py-3 font-bold text-white shadow hover:bg-cesped-800 disabled:opacity-60"
-            >
+            <button type="submit" disabled={trabajando} className="btn-primary w-full">
               {trabajando ? "Procesando…" : "Finalizar y calcular ganadores"}
             </button>
           </form>
         </section>
       ) : (
-        <section className="rounded-2xl border-2 border-cesped-500 bg-cesped-50 p-5 shadow">
-          <h3 className="font-bold text-cesped-800">
+        <section className="overflow-hidden rounded-2xl border border-oro-400/30 bg-oro-400/[0.06] p-5 shadow-glow-gold">
+          <h3 className="font-bold text-oro-300">
             Resultado: {porra.resultadoLocal} - {porra.resultadoVisitante}
           </h3>
           {estado.ganadores.length > 0 ? (
             <ul className="mt-3 flex flex-col gap-2">
               {estado.ganadores.map((g) => (
-                <li key={g.id} className="flex justify-between rounded-lg bg-white px-4 py-2">
-                  <span className="font-semibold">🏆 {g.nombre}</span>
-                  <span className="font-bold text-cesped-700">{formatearEuros(g.premio)}</span>
+                <li
+                  key={g.id}
+                  className="flex justify-between rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5"
+                >
+                  <span className="font-semibold text-oro-200">🏆 {g.nombre}</span>
+                  <span className="font-bold text-oro-300">{formatearEuros(g.premio)}</span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="mt-2 text-sm text-slate-600">No hubo apuestas.</p>
+            <p className="mt-2 text-sm text-slate-400">No hubo apuestas.</p>
           )}
         </section>
       )}
 
       {/* Reiniciar */}
-      <section className="rounded-2xl border border-red-200 bg-red-50 p-5">
-        <h3 className="mb-2 font-bold text-red-800">Zona peligrosa</h3>
-        <p className="mb-3 text-sm text-red-700">
+      <section className="rounded-2xl border border-red-500/30 bg-red-500/10 p-5">
+        <h3 className="mb-2 font-bold text-red-300">Zona peligrosa</h3>
+        <p className="mb-3 text-sm text-red-200/80">
           Reiniciar borra la porra actual y todas sus apuestas. Esta acción no se puede deshacer.
         </p>
         {confirmarReinicio ? (
@@ -381,23 +375,20 @@ function GestionPorra({
             <button
               disabled={trabajando}
               onClick={reiniciar}
-              className="flex-1 rounded-lg bg-red-600 px-4 py-2 font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+              className="btn-danger flex-1 py-2"
             >
               Sí, borrar todo
             </button>
             <button
               disabled={trabajando}
               onClick={() => setConfirmarReinicio(false)}
-              className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700"
+              className="btn-ghost flex-1 py-2"
             >
               Cancelar
             </button>
           </div>
         ) : (
-          <button
-            onClick={() => setConfirmarReinicio(true)}
-            className="rounded-lg bg-red-600 px-4 py-2 font-semibold text-white hover:bg-red-700"
-          >
+          <button onClick={() => setConfirmarReinicio(true)} className="btn-danger py-2">
             Reiniciar porra
           </button>
         )}

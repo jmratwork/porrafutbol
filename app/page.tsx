@@ -80,7 +80,7 @@ export default function HomePage() {
   if (cargando) {
     return (
       <main className="mx-auto flex min-h-screen max-w-2xl items-center justify-center p-6">
-        <p className="animate-pulse text-cesped-700">Cargando porra…</p>
+        <p className="animate-pulse text-cesped-300">Cargando porra…</p>
       </main>
     );
   }
@@ -88,11 +88,8 @@ export default function HomePage() {
   if (errorCarga) {
     return (
       <main className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center gap-4 p-6 text-center">
-        <p className="text-red-600">{errorCarga}</p>
-        <button
-          onClick={cargar}
-          className="rounded-lg bg-cesped-600 px-4 py-2 font-semibold text-white hover:bg-cesped-700"
-        >
+        <p className="text-red-300">{errorCarga}</p>
+        <button onClick={cargar} className="btn-primary">
           Reintentar
         </button>
       </main>
@@ -104,12 +101,15 @@ export default function HomePage() {
   if (!porra) {
     return (
       <main className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center gap-4 p-6 text-center">
-        <h1 className="text-2xl font-bold text-cesped-800">⚽ Porra de fútbol</h1>
-        <p className="text-slate-600">
+        <span className="text-5xl" aria-hidden="true">
+          ⚽
+        </span>
+        <h1 className="text-2xl font-black text-white">Porra de fútbol</h1>
+        <p className="max-w-sm text-slate-400">
           Todavía no hay ninguna porra activa. El organizador debe crearla desde el panel de
           administración.
         </p>
-        <a href="/admin" className="text-cesped-700 underline">
+        <a href="/admin" className="btn-ghost">
           Ir al panel de administración
         </a>
       </main>
@@ -120,41 +120,61 @@ export default function HomePage() {
   const finalizada = porra.estado === "FINALIZADA";
   const completa = estado!.completa;
   const puedeApostar = abierta && !completa;
+  const pctOcupacion = Math.min(100, Math.round((estado!.numApuestas / MAX_APOSTANTES) * 100));
 
   return (
     <main className="mx-auto max-w-2xl px-4 pb-16 pt-6 sm:pt-10">
-      {/* Cabecera tipo marcador */}
-      <header className="cesped-stripes overflow-hidden rounded-2xl p-5 text-white shadow-xl sm:p-7">
-        <Marcador
-          local={porra.equipoLocal}
-          visitante={porra.equipoVisitante}
-          golesLocal={finalizada ? porra.resultadoLocal : undefined}
-          golesVisitante={finalizada ? porra.resultadoVisitante : undefined}
-        />
-        <div className="mt-5 flex flex-col items-center gap-1 text-center">
-          <span className="text-sm text-cesped-50/90">{formatearFecha(porra.fechaPartido)}</span>
-          {!finalizada && <CuentaAtras fechaISO={porra.fechaPartido} />}
-          <EstadoBadge estado={porra.estado} />
+      {/* Cabecera tipo videomarcador */}
+      <header className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-noche-700 to-noche-950 p-6 shadow-2xl sm:p-8">
+        {/* Foco de luz superior */}
+        <div className="pointer-events-none absolute inset-x-0 -top-24 h-48 bg-cesped-500/20 blur-3xl" />
+
+        <div className="relative">
+          <Marcador
+            local={porra.equipoLocal}
+            visitante={porra.equipoVisitante}
+            golesLocal={finalizada ? porra.resultadoLocal : undefined}
+            golesVisitante={finalizada ? porra.resultadoVisitante : undefined}
+          />
+          <div className="mt-6 flex flex-col items-center gap-3 text-center">
+            <span className="text-sm font-medium text-slate-400">
+              {formatearFecha(porra.fechaPartido)}
+            </span>
+            {!finalizada && <CuentaAtras fechaISO={porra.fechaPartido} />}
+            <EstadoBadge estado={porra.estado} />
+          </div>
         </div>
       </header>
 
       {/* Bote y nº de apuestas */}
-      <section className="mt-5 grid grid-cols-2 gap-3">
-        <div className="rounded-xl bg-white p-4 text-center shadow">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Bote actual</p>
-          <p className="text-2xl font-black text-cesped-700">{formatearEuros(estado!.bote)}</p>
+      <section className="mt-4 grid grid-cols-2 gap-3">
+        <div className="stat-card">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Bote actual</p>
+          <p className="mt-1 text-3xl font-black text-cesped-300">{formatearEuros(estado!.bote)}</p>
         </div>
-        <div className="rounded-xl bg-white p-4 text-center shadow">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Apuestas</p>
-          <p className="text-2xl font-black text-cesped-700">
+        <div className="stat-card">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Apuestas</p>
+          <p className="mt-1 text-3xl font-black text-cesped-300">
             {estado!.numApuestas}
-            <span className="text-base font-semibold text-slate-400">/{MAX_APOSTANTES}</span>
+            <span className="text-lg font-bold text-slate-500">/{MAX_APOSTANTES}</span>
           </p>
         </div>
       </section>
 
-      <div className="mt-2 text-center text-xs text-slate-500">
-        Apuesta: {formatearEuros(porra.precio)} por persona
+      {/* Barra de ocupación */}
+      <div className="mt-3 card p-4">
+        <div className="flex items-center justify-between text-xs font-medium text-slate-400">
+          <span>Plazas ocupadas</span>
+          <span className="tabular-nums">
+            {estado!.numApuestas}/{MAX_APOSTANTES} · {formatearEuros(porra.precio)} por persona
+          </span>
+        </div>
+        <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-white/[0.07]">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-cesped-500 to-cesped-300 transition-[width] duration-500"
+            style={{ width: `${pctOcupacion}%` }}
+          />
+        </div>
       </div>
 
       {/* Banner de resultado / ganadores si finalizada */}
@@ -162,16 +182,16 @@ export default function HomePage() {
 
       {/* Formulario de apuesta */}
       {!finalizada && (
-        <section className="mt-6 rounded-2xl bg-white p-5 shadow sm:p-6">
-          <h2 className="mb-4 text-lg font-bold text-cesped-800">Haz tu apuesta</h2>
+        <section className="mt-6 card p-5 sm:p-6">
+          <h2 className="mb-4 text-lg font-bold text-white">Haz tu apuesta</h2>
 
           {!abierta && (
-            <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+            <p className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-200">
               La porra está <strong>cerrada</strong>. Ya no se aceptan nuevas apuestas.
             </p>
           )}
           {abierta && completa && (
-            <p className="rounded-lg bg-amber-50 p-3 text-sm font-semibold text-amber-800">
+            <p className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm font-semibold text-amber-200">
               Porra completa ({MAX_APOSTANTES}/{MAX_APOSTANTES}). No se admiten más apuestas.
             </p>
           )}
@@ -179,7 +199,7 @@ export default function HomePage() {
           {puedeApostar && (
             <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
               <div>
-                <label htmlFor="nombre" className="mb-1 block text-sm font-medium text-slate-700">
+                <label htmlFor="nombre" className="label">
                   Tu nombre
                 </label>
                 <input
@@ -190,17 +210,15 @@ export default function HomePage() {
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
                   placeholder="Ej. Marta"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-cesped-600"
+                  className="input"
                 />
               </div>
 
               <fieldset>
-                <legend className="mb-1 block text-sm font-medium text-slate-700">
-                  Tu pronóstico (goles)
-                </legend>
+                <legend className="label">Tu pronóstico (goles)</legend>
                 <div className="flex items-center gap-3">
                   <div className="flex-1">
-                    <label htmlFor="golesLocal" className="mb-1 block text-xs text-slate-500">
+                    <label htmlFor="golesLocal" className="mb-1 block text-xs text-slate-400">
                       {porra.equipoLocal}
                     </label>
                     <input
@@ -213,12 +231,12 @@ export default function HomePage() {
                       step={1}
                       value={golesLocal}
                       onChange={(e) => setGolesLocal(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-center text-lg font-bold focus:border-cesped-600"
+                      className="input-score"
                     />
                   </div>
-                  <span className="mt-5 text-xl font-black text-slate-400">-</span>
+                  <span className="mt-5 text-2xl font-black text-cesped-400">-</span>
                   <div className="flex-1">
-                    <label htmlFor="golesVisitante" className="mb-1 block text-xs text-slate-500">
+                    <label htmlFor="golesVisitante" className="mb-1 block text-xs text-slate-400">
                       {porra.equipoVisitante}
                     </label>
                     <input
@@ -231,17 +249,13 @@ export default function HomePage() {
                       step={1}
                       value={golesVisitante}
                       onChange={(e) => setGolesVisitante(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-center text-lg font-bold focus:border-cesped-600"
+                      className="input-score"
                     />
                   </div>
                 </div>
               </fieldset>
 
-              <button
-                type="submit"
-                disabled={enviando}
-                className="mt-1 rounded-lg bg-cesped-600 px-4 py-3 font-bold text-white shadow transition hover:bg-cesped-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
+              <button type="submit" disabled={enviando} className="btn-primary mt-1 w-full">
                 {enviando ? "Enviando…" : "Apostar"}
               </button>
             </form>
@@ -250,30 +264,34 @@ export default function HomePage() {
       )}
 
       {/* Lista de apuestas */}
-      <section className="mt-6 rounded-2xl bg-white p-5 shadow sm:p-6">
-        <h2 className="mb-3 text-lg font-bold text-cesped-800">
-          Apuestas ({estado!.numApuestas})
-        </h2>
+      <section className="mt-6 card p-5 sm:p-6">
+        <h2 className="mb-3 text-lg font-bold text-white">Apuestas ({estado!.numApuestas})</h2>
         {estado!.apuestas.length === 0 ? (
-          <p className="py-6 text-center text-sm text-slate-500">
+          <p className="py-6 text-center text-sm text-slate-400">
             Todavía no hay apuestas. ¡Sé el primero!
           </p>
         ) : (
-          <ul className="divide-y divide-slate-100">
+          <ul className="flex flex-col gap-1.5">
             {estado!.apuestas.map((a) => {
               const esGanador = estado!.ganadores.some((g) => g.id === a.id);
               return (
                 <li
                   key={a.id}
-                  className={`flex items-center justify-between py-2.5 ${
-                    esGanador ? "rounded-lg bg-cesped-50 px-2" : ""
+                  className={`flex items-center justify-between rounded-xl px-3 py-2.5 ${
+                    esGanador
+                      ? "bg-oro-400/10 ring-1 ring-oro-400/30"
+                      : "bg-white/[0.02]"
                   }`}
                 >
-                  <span className="flex items-center gap-2 font-medium text-slate-800">
+                  <span
+                    className={`flex items-center gap-2 font-medium ${
+                      esGanador ? "text-oro-300" : "text-slate-200"
+                    }`}
+                  >
                     {esGanador && <span aria-label="Ganador">🏆</span>}
                     {a.nombre}
                   </span>
-                  <span className="font-mono text-sm font-bold tabular-nums text-slate-700">
+                  <span className="font-mono text-sm font-bold tabular-nums text-slate-300">
                     {a.golesLocal} - {a.golesVisitante}
                   </span>
                 </li>
@@ -285,16 +303,13 @@ export default function HomePage() {
 
       {/* Compartir */}
       <div className="mt-6 flex justify-center">
-        <button
-          onClick={copiarEnlace}
-          className="rounded-lg border border-cesped-600 px-4 py-2 text-sm font-semibold text-cesped-700 transition hover:bg-cesped-50"
-        >
+        <button onClick={copiarEnlace} className="btn-ghost px-4 py-2 text-sm">
           🔗 Copiar enlace
         </button>
       </div>
 
-      <footer className="mt-8 text-center text-xs text-slate-400">
-        <a href="/admin" className="underline hover:text-slate-600">
+      <footer className="mt-8 text-center text-xs text-slate-500">
+        <a href="/admin" className="underline transition hover:text-slate-300">
           Panel de administración
         </a>
       </footer>
@@ -306,9 +321,14 @@ export default function HomePage() {
 
 function EstadoBadge({ estado }: { estado: string }) {
   const mapa: Record<string, string> = {
-    ABIERTA: "bg-cesped-100 text-cesped-800",
-    CERRADA: "bg-amber-100 text-amber-800",
-    FINALIZADA: "bg-slate-200 text-slate-800",
+    ABIERTA: "bg-cesped-400/15 text-cesped-300 ring-cesped-400/30",
+    CERRADA: "bg-amber-400/15 text-amber-300 ring-amber-400/30",
+    FINALIZADA: "bg-slate-400/15 text-slate-300 ring-slate-400/30",
+  };
+  const puntos: Record<string, string> = {
+    ABIERTA: "bg-cesped-400 animate-pulse-dot",
+    CERRADA: "bg-amber-400",
+    FINALIZADA: "bg-slate-400",
   };
   const etiqueta: Record<string, string> = {
     ABIERTA: "Apuestas abiertas",
@@ -316,7 +336,12 @@ function EstadoBadge({ estado }: { estado: string }) {
     FINALIZADA: "Finalizada",
   };
   return (
-    <span className={`mt-1 rounded-full px-3 py-0.5 text-xs font-bold ${mapa[estado] ?? ""}`}>
+    <span
+      className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold ring-1 ${
+        mapa[estado] ?? ""
+      }`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${puntos[estado] ?? "bg-slate-400"}`} />
       {etiqueta[estado] ?? estado}
     </span>
   );
@@ -325,13 +350,13 @@ function EstadoBadge({ estado }: { estado: string }) {
 function BannerGanadores({ estado }: { estado: EstadoActualDTO }) {
   const { ganadores } = estado;
   return (
-    <section className="mt-6 rounded-2xl border-2 border-cesped-500 bg-cesped-50 p-5 text-center shadow">
-      <h2 className="text-lg font-black text-cesped-800">🏁 Resultado final</h2>
+    <section className="mt-6 overflow-hidden rounded-2xl border border-oro-400/30 bg-oro-400/[0.06] p-5 text-center shadow-glow-gold">
+      <h2 className="text-lg font-black text-oro-300">🏁 Resultado final</h2>
       {ganadores.length === 0 ? (
-        <p className="mt-2 text-sm text-slate-600">No hubo apuestas para repartir el bote.</p>
+        <p className="mt-2 text-sm text-slate-400">No hubo apuestas para repartir el bote.</p>
       ) : (
         <>
-          <p className="mt-1 text-sm text-slate-600">
+          <p className="mt-1 text-sm text-slate-300">
             {ganadores[0].tipo === "EXACTO"
               ? "Ganador(es) por acierto exacto:"
               : "Nadie acertó el marcador exacto. Ganador(es) por proximidad:"}
@@ -340,14 +365,14 @@ function BannerGanadores({ estado }: { estado: EstadoActualDTO }) {
             {ganadores.map((g) => (
               <li
                 key={g.id}
-                className="flex items-center justify-between rounded-lg bg-white px-4 py-2 shadow-sm"
+                className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5"
               >
-                <span className="font-bold text-cesped-800">🏆 {g.nombre}</span>
+                <span className="font-bold text-oro-200">🏆 {g.nombre}</span>
                 <span className="flex items-center gap-3">
-                  <span className="font-mono text-sm tabular-nums text-slate-500">
+                  <span className="font-mono text-sm tabular-nums text-slate-400">
                     {g.golesLocal} - {g.golesVisitante}
                   </span>
-                  <span className="font-black text-cesped-700">{formatearEuros(g.premio)}</span>
+                  <span className="font-black text-oro-300">{formatearEuros(g.premio)}</span>
                 </span>
               </li>
             ))}

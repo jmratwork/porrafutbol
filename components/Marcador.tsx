@@ -19,25 +19,39 @@ export function Marcador({
     typeof golesLocal === "number" && typeof golesVisitante === "number";
 
   return (
-    <div className="flex items-center justify-center gap-3 sm:gap-6">
-      <div className="flex flex-1 flex-col items-center gap-2 text-center">
+    <div className="relative flex items-center justify-center gap-3 sm:gap-6">
+      <div className="flex flex-1 flex-col items-center gap-2.5 text-center">
         <Escudo nombre={local} />
-        <span className="line-clamp-2 text-sm font-semibold sm:text-base">{local}</span>
+        <span className="line-clamp-2 text-sm font-semibold text-slate-100 sm:text-base">
+          {local}
+        </span>
       </div>
 
-      <div className="flex min-w-[72px] flex-col items-center">
+      <div className="flex min-w-[84px] flex-col items-center">
         {hayResultado ? (
-          <span className="text-4xl font-black tabular-nums sm:text-5xl">
-            {golesLocal} <span className="text-cesped-200">-</span> {golesVisitante}
+          <span
+            className="text-5xl font-black tabular-nums text-white sm:text-6xl"
+            style={{ textShadow: "0 0 24px rgba(74,222,128,0.45)" }}
+          >
+            {golesLocal}
+            <span className="px-1.5 text-cesped-400">-</span>
+            {golesVisitante}
           </span>
         ) : (
-          <span className="text-2xl font-black text-cesped-100 sm:text-3xl">VS</span>
+          <span
+            className="text-3xl font-black text-cesped-300 sm:text-4xl"
+            style={{ textShadow: "0 0 22px rgba(74,222,128,0.45)" }}
+          >
+            VS
+          </span>
         )}
       </div>
 
-      <div className="flex flex-1 flex-col items-center gap-2 text-center">
+      <div className="flex flex-1 flex-col items-center gap-2.5 text-center">
         <Escudo nombre={visitante} />
-        <span className="line-clamp-2 text-sm font-semibold sm:text-base">{visitante}</span>
+        <span className="line-clamp-2 text-sm font-semibold text-slate-100 sm:text-base">
+          {visitante}
+        </span>
       </div>
     </div>
   );

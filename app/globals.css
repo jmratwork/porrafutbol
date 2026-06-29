@@ -3,27 +3,92 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 body {
-  @apply bg-cesped-50 text-slate-900 antialiased;
+  @apply text-slate-100 antialiased;
+  min-height: 100vh;
+  background-color: #04100a;
+  /* Ambiente de estadio nocturno: focos de luz + degradado profundo. */
+  background-image:
+    radial-gradient(1100px 520px at 50% -8%, rgba(34, 197, 94, 0.20), transparent 60%),
+    radial-gradient(720px 460px at 100% 0%, rgba(16, 185, 129, 0.12), transparent 55%),
+    radial-gradient(720px 460px at 0% 8%, rgba(20, 184, 166, 0.10), transparent 55%),
+    linear-gradient(180deg, #07160e 0%, #04100a 55%, #030c07 100%);
+  background-attachment: fixed;
+}
+
+/* Líneas sutiles de césped sobre todo el fondo. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.018) 0,
+    rgba(255, 255, 255, 0.018) 64px,
+    transparent 64px,
+    transparent 128px
+  );
 }
 
 /* Foco visible y accesible en todos los elementos interactivos. */
 :focus-visible {
-  outline: 3px solid #15803d;
+  outline: 2px solid #4ade80;
   outline-offset: 2px;
+  border-radius: 6px;
 }
 
-/* Patrón sutil de césped para la cabecera. */
-.cesped-stripes {
-  background-image: linear-gradient(
-    90deg,
-    #15803d 0%,
-    #16a34a 25%,
-    #15803d 50%,
-    #16a34a 75%,
-    #15803d 100%
-  );
+@layer components {
+  /* Tarjeta de cristal: superficie translúcida con desenfoque. */
+  .card {
+    @apply rounded-2xl border border-white/10 bg-white/[0.04] shadow-xl backdrop-blur-md;
+  }
+
+  .stat-card {
+    @apply card flex flex-col items-center justify-center p-4 text-center;
+  }
+
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-slate-300;
+  }
+
+  .input {
+    @apply w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-slate-100
+      placeholder:text-slate-500 transition
+      focus:border-cesped-400 focus:bg-white/[0.06] focus:outline-none;
+  }
+
+  .input-score {
+    @apply input text-center text-2xl font-black tabular-nums;
+  }
+
+  /* Botones */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 font-bold
+      transition active:scale-[0.98]
+      disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply btn bg-gradient-to-b from-cesped-400 to-cesped-600 text-noche-950 shadow-glow
+      hover:from-cesped-300 hover:to-cesped-500;
+  }
+
+  .btn-ghost {
+    @apply btn border border-white/15 bg-white/[0.03] text-slate-100 hover:bg-white/[0.08];
+  }
+
+  .btn-amber {
+    @apply btn bg-gradient-to-b from-amber-400 to-amber-600 text-noche-950
+      hover:from-amber-300 hover:to-amber-500;
+  }
+
+  .btn-danger {
+    @apply btn bg-gradient-to-b from-red-500 to-red-700 text-white
+      hover:from-red-400 hover:to-red-600;
+  }
 }
