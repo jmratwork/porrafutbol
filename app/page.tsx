@@ -5,19 +5,71 @@ import { Marcador } from "@/components/Marcador";
 import { CuentaAtras } from "@/components/CuentaAtras";
 import { Toast, type ToastData } from "@/components/Toast";
 import { formatearEuros, formatearFecha } from "@/lib/format";
-import { MAX_APOSTANTES, MAX_GOLES, type EstadoActualDTO } from "@/lib/types";
+import {
+  MAX_APOSTANTES,
+  MAX_GOLES,
+  type ApuestaDTO,
+  type CrearApuestaDTO,
+  type EstadoActualDTO,
+} from "@/lib/types";
+
+// Clave de localStorage donde guardamos los códigos de las apuestas hechas
+// desde este navegador: { [apuestaId]: codigo }. Permite gestionar la propia
+// apuesta sin volver a teclear el código.
+const LS_CODIGOS = "porra_misApuestas";
+
+function leerCodigos(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(window.localStorage.getItem(LS_CODIGOS) ?? "{}");
+  } catch {
+    return {};
+  }
+}
 
 export default function HomePage() {
   const [estado, setEstado] = useState<EstadoActualDTO | null>(null);
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
-  // Formulario
+  // Formulario de nueva apuesta
   const [nombre, setNombre] = useState("");
   const [golesLocal, setGolesLocal] = useState("");
   const [golesVisitante, setGolesVisitante] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
+
+  // Códigos propios + panel del código recién generado
+  const [misCodigos, setMisCodigos] = useState<Record<string, string>>({});
+  const [codigoNuevo, setCodigoNuevo] = useState<{ id: string; codigo: string } | null>(null);
+
+  // Gestión (editar/borrar) de una apuesta concreta
+  const [gestionId, setGestionId] = useState<string | null>(null);
+  const [gLocal, setGLocal] = useState("");
+  const [gVisitante, setGVisitante] = useState("");
+  const [gCodigo, setGCodigo] = useState("");
+  const [gTrabajando, setGTrabajando] = useState(false);
+
+  useEffect(() => {
+    setMisCodigos(leerCodigos());
+  }, []);
+
+  const guardarCodigoLocal = useCallback((id: string, codigo: string) => {
+    setMisCodigos((prev) => {
+      const siguiente = { ...prev, [id]: codigo };
+      window.localStorage.setItem(LS_CODIGOS, JSON.stringify(siguiente));
+      return siguiente;
+    });
+  }, []);
+
+  const olvidarCodigoLocal = useCallback((id: string) => {
+    setMisCodigos((prev) => {
+      const siguiente = { ...prev };
+      delete siguiente[id];
+      window.localStorage.setItem(LS_CODIGOS, JSON.stringify(siguiente));
+      return siguiente;
+    });
+  }, []);
 
   const cargar = useCallback(async () => {
     try {
@@ -54,16 +106,91 @@ export default function HomePage() {
       if (!res.ok) {
         setToast({ tipo: "error", mensaje: data.error ?? "No se pudo registrar la apuesta." });
       } else {
-        setEstado(data);
+        const creada = data as CrearApuestaDTO;
+        setEstado(creada.estado);
+        guardarCodigoLocal(creada.apuestaId, creada.codigo);
+        setCodigoNuevo({ id: creada.apuestaId, codigo: creada.codigo });
         setNombre("");
         setGolesLocal("");
         setGolesVisitante("");
-        setToast({ tipo: "exito", mensaje: "¡Apuesta registrada! Mucha suerte 🍀" });
       }
     } catch {
       setToast({ tipo: "error", mensaje: "Error de red. Inténtalo de nuevo." });
     } finally {
       setEnviando(false);
+    }
+  };
+
+  const abrirGestion = (a: ApuestaDTO) => {
+    setGestionId(a.id);
+    setGLocal(String(a.golesLocal));
+    setGVisitante(String(a.golesVisitante));
+    setGCodigo(misCodigos[a.id] ?? "");
+  };
+
+  const cerrarGestion = () => {
+    setGestionId(null);
+    setGCodigo("");
+  };
+
+  const guardarEdicion = async (id: string) => {
+    setGTrabajando(true);
+    try {
+      const res = await fetch(`/api/apuestas/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-apuesta-codigo": gCodigo.trim() },
+        body: JSON.stringify({
+          golesLocal: gLocal === "" ? null : Number(gLocal),
+          golesVisitante: gVisitante === "" ? null : Number(gVisitante),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setToast({ tipo: "error", mensaje: data.error ?? "No se pudo actualizar." });
+      } else {
+        setEstado(data as EstadoActualDTO);
+        guardarCodigoLocal(id, gCodigo.trim());
+        cerrarGestion();
+        setToast({ tipo: "exito", mensaje: "Apuesta actualizada." });
+      }
+    } catch {
+      setToast({ tipo: "error", mensaje: "Error de red. Inténtalo de nuevo." });
+    } finally {
+      setGTrabajando(false);
+    }
+  };
+
+  const borrarApuesta = async (id: string) => {
+    if (!window.confirm("¿Seguro que quieres borrar tu apuesta? No se puede deshacer.")) return;
+    setGTrabajando(true);
+    try {
+      const res = await fetch(`/api/apuestas/${id}`, {
+        method: "DELETE",
+        headers: { "x-apuesta-codigo": gCodigo.trim() },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setToast({ tipo: "error", mensaje: data.error ?? "No se pudo borrar." });
+      } else {
+        setEstado(data as EstadoActualDTO);
+        olvidarCodigoLocal(id);
+        if (codigoNuevo?.id === id) setCodigoNuevo(null);
+        cerrarGestion();
+        setToast({ tipo: "exito", mensaje: "Apuesta borrada." });
+      }
+    } catch {
+      setToast({ tipo: "error", mensaje: "Error de red. Inténtalo de nuevo." });
+    } finally {
+      setGTrabajando(false);
+    }
+  };
+
+  const copiarCodigo = async (codigo: string) => {
+    try {
+      await navigator.clipboard.writeText(codigo);
+      setToast({ tipo: "exito", mensaje: "Código copiado al portapapeles." });
+    } catch {
+      setToast({ tipo: "error", mensaje: "No se pudo copiar el código." });
     }
   };
 
@@ -177,6 +304,38 @@ export default function HomePage() {
         </div>
       </div>
 
+      {/* Panel del código recién generado */}
+      {codigoNuevo && (
+        <section className="mt-4 animate-rise-in rounded-2xl border border-cesped-400/30 bg-cesped-400/[0.08] p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="font-bold text-cesped-200">¡Apuesta registrada! 🍀</h2>
+              <p className="mt-1 text-sm text-slate-300">
+                Guarda este código para editar o borrar tu apuesta más tarde:
+              </p>
+            </div>
+            <button
+              onClick={() => setCodigoNuevo(null)}
+              className="text-slate-400 transition hover:text-slate-200"
+              aria-label="Cerrar"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="mt-3 flex items-center gap-3">
+            <span className="rounded-xl border border-white/10 bg-noche-950/60 px-4 py-2 font-mono text-2xl font-black tracking-[0.3em] text-cesped-300">
+              {codigoNuevo.codigo}
+            </span>
+            <button onClick={() => copiarCodigo(codigoNuevo.codigo)} className="btn-ghost px-3 py-2 text-sm">
+              Copiar
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-slate-400">
+            Se ha guardado en este navegador. Apúntalo si vas a gestionarla desde otro dispositivo.
+          </p>
+        </section>
+      )}
+
       {/* Banner de resultado / ganadores si finalizada */}
       {finalizada && <BannerGanadores estado={estado!} />}
 
@@ -212,6 +371,9 @@ export default function HomePage() {
                   placeholder="Ej. Marta"
                   className="input"
                 />
+                <p className="mt-1 text-xs text-slate-500">
+                  Cada nombre debe ser único en esta porra.
+                </p>
               </div>
 
               <fieldset>
@@ -274,26 +436,117 @@ export default function HomePage() {
           <ul className="flex flex-col gap-1.5">
             {estado!.apuestas.map((a) => {
               const esGanador = estado!.ganadores.some((g) => g.id === a.id);
+              const esMia = Boolean(misCodigos[a.id]);
+              const gestionando = gestionId === a.id;
               return (
                 <li
                   key={a.id}
-                  className={`flex items-center justify-between rounded-xl px-3 py-2.5 ${
+                  className={`rounded-xl ${
                     esGanador
                       ? "bg-oro-400/10 ring-1 ring-oro-400/30"
-                      : "bg-white/[0.02]"
+                      : gestionando
+                        ? "bg-white/[0.05] ring-1 ring-cesped-400/30"
+                        : "bg-white/[0.02]"
                   }`}
                 >
-                  <span
-                    className={`flex items-center gap-2 font-medium ${
-                      esGanador ? "text-oro-300" : "text-slate-200"
-                    }`}
-                  >
-                    {esGanador && <span aria-label="Ganador">🏆</span>}
-                    {a.nombre}
-                  </span>
-                  <span className="font-mono text-sm font-bold tabular-nums text-slate-300">
-                    {a.golesLocal} - {a.golesVisitante}
-                  </span>
+                  <div className="flex items-center justify-between px-3 py-2.5">
+                    <span
+                      className={`flex items-center gap-2 font-medium ${
+                        esGanador ? "text-oro-300" : "text-slate-200"
+                      }`}
+                    >
+                      {esGanador && <span aria-label="Ganador">🏆</span>}
+                      {a.nombre}
+                      {esMia && (
+                        <span className="rounded-full bg-cesped-400/15 px-2 py-0.5 text-[0.65rem] font-bold text-cesped-300 ring-1 ring-cesped-400/30">
+                          tuya
+                        </span>
+                      )}
+                    </span>
+                    <span className="flex items-center gap-3">
+                      <span className="font-mono text-sm font-bold tabular-nums text-slate-300">
+                        {a.golesLocal} - {a.golesVisitante}
+                      </span>
+                      {abierta && (
+                        <button
+                          onClick={() => (gestionando ? cerrarGestion() : abrirGestion(a))}
+                          className="rounded-lg border border-white/10 px-2 py-1 text-xs font-semibold text-slate-300 transition hover:bg-white/[0.06]"
+                        >
+                          {gestionando ? "Cerrar" : "Gestionar"}
+                        </button>
+                      )}
+                    </span>
+                  </div>
+
+                  {gestionando && (
+                    <div className="border-t border-white/10 px-3 py-3">
+                      <div className="flex items-end gap-3">
+                        <div className="flex-1">
+                          <label className="mb-1 block text-xs text-slate-400">
+                            {porra.equipoLocal}
+                          </label>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            max={MAX_GOLES}
+                            step={1}
+                            value={gLocal}
+                            onChange={(e) => setGLocal(e.target.value)}
+                            className="input-score"
+                          />
+                        </div>
+                        <span className="mb-2 text-xl font-black text-cesped-400">-</span>
+                        <div className="flex-1">
+                          <label className="mb-1 block text-xs text-slate-400">
+                            {porra.equipoVisitante}
+                          </label>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            max={MAX_GOLES}
+                            step={1}
+                            value={gVisitante}
+                            onChange={(e) => setGVisitante(e.target.value)}
+                            className="input-score"
+                          />
+                        </div>
+                      </div>
+
+                      {!esMia && (
+                        <div className="mt-3">
+                          <label className="mb-1 block text-xs text-slate-400">
+                            Código de tu apuesta
+                          </label>
+                          <input
+                            type="text"
+                            value={gCodigo}
+                            onChange={(e) => setGCodigo(e.target.value)}
+                            placeholder="Ej. K7M2QP"
+                            className="input font-mono uppercase tracking-widest"
+                          />
+                        </div>
+                      )}
+
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          disabled={gTrabajando}
+                          onClick={() => guardarEdicion(a.id)}
+                          className="btn-primary flex-1 py-2 text-sm"
+                        >
+                          {gTrabajando ? "Guardando…" : "Guardar cambios"}
+                        </button>
+                        <button
+                          disabled={gTrabajando}
+                          onClick={() => borrarApuesta(a.id)}
+                          className="btn-danger px-3 py-2 text-sm"
+                        >
+                          Borrar
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </li>
               );
             })}

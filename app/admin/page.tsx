@@ -70,6 +70,34 @@ export default function AdminPage() {
     }
   };
 
+  /** Borra una apuesta concreta usando el PIN (rescate del administrador). */
+  const eliminarApuesta = async (id: string) => {
+    if (!pin) {
+      setToast({ tipo: "error", mensaje: "Introduce el PIN de administración." });
+      return;
+    }
+    if (!window.confirm("¿Borrar esta apuesta? (rescate de administración)")) return;
+    setTrabajando(true);
+    try {
+      const res = await fetch(`/api/apuestas/${id}`, {
+        method: "DELETE",
+        headers: { "x-admin-pin": pin },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setToast({ tipo: "error", mensaje: data.error ?? "No se pudo borrar la apuesta." });
+        return;
+      }
+      sessionStorage.setItem(PIN_STORAGE_KEY, pin);
+      setEstado(data);
+      setToast({ tipo: "exito", mensaje: "Apuesta borrada." });
+    } catch {
+      setToast({ tipo: "error", mensaje: "Error de red. Inténtalo de nuevo." });
+    } finally {
+      setTrabajando(false);
+    }
+  };
+
   if (cargando) {
     return (
       <main className="mx-auto flex min-h-screen max-w-2xl items-center justify-center p-6">
@@ -111,7 +139,12 @@ export default function AdminPage() {
       </section>
 
       {porra ? (
-        <GestionPorra estado={estado!} trabajando={trabajando} peticion={peticion} />
+        <GestionPorra
+          estado={estado!}
+          trabajando={trabajando}
+          peticion={peticion}
+          eliminarApuesta={eliminarApuesta}
+        />
       ) : (
         <CrearPorra trabajando={trabajando} peticion={peticion} />
       )}
@@ -222,10 +255,12 @@ function GestionPorra({
   estado,
   trabajando,
   peticion,
+  eliminarApuesta,
 }: {
   estado: EstadoActualDTO;
   trabajando: boolean;
   peticion: PeticionFn;
+  eliminarApuesta: (id: string) => void;
 }) {
   const porra = estado.porra!;
   const [resLocal, setResLocal] = useState("");
@@ -363,6 +398,42 @@ function GestionPorra({
           )}
         </section>
       )}
+
+      {/* Apuestas registradas (rescate: borrar una concreta) */}
+      <section className="card p-5">
+        <h3 className="mb-3 font-bold text-white">Apuestas ({estado.numApuestas})</h3>
+        {estado.apuestas.length === 0 ? (
+          <p className="text-sm text-slate-400">Todavía no hay apuestas.</p>
+        ) : (
+          <ul className="flex flex-col gap-1.5">
+            {estado.apuestas.map((a) => (
+              <li
+                key={a.id}
+                className="flex items-center justify-between rounded-xl bg-white/[0.02] px-3 py-2.5"
+              >
+                <span className="font-medium text-slate-200">{a.nombre}</span>
+                <span className="flex items-center gap-3">
+                  <span className="font-mono text-sm font-bold tabular-nums text-slate-300">
+                    {a.golesLocal} - {a.golesVisitante}
+                  </span>
+                  {porra.estado !== "FINALIZADA" && (
+                    <button
+                      disabled={trabajando}
+                      onClick={() => eliminarApuesta(a.id)}
+                      className="rounded-lg border border-red-500/30 px-2 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10 disabled:opacity-50"
+                    >
+                      Borrar
+                    </button>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-3 text-xs text-slate-500">
+          Rescate para quien haya perdido su código. No disponible una vez finalizada la porra.
+        </p>
+      </section>
 
       {/* Reiniciar */}
       <section className="rounded-2xl border border-red-500/30 bg-red-500/10 p-5">

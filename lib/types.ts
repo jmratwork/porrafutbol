@@ -46,3 +46,11 @@ export interface EstadoActualDTO {
   completa: boolean;
   ganadores: GanadorDTO[];
 }
+
+// Respuesta de POST /api/apuestas: el estado actualizado más el código secreto
+// de la apuesta recién creada (se muestra una sola vez para que su dueño la gestione).
+export interface CrearApuestaDTO {
+  estado: EstadoActualDTO;
+  apuestaId: string;
+  codigo: string;
+}

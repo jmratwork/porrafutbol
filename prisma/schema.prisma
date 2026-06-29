@@ -44,9 +44,17 @@ model Apuesta {
   porraId         String
   porra           Porra    @relation(fields: [porraId], references: [id], onDelete: Cascade)
   nombre          String
+  // Nombre normalizado (minúsculas, sin espacios sobrantes) para garantizar
+  // unicidad por porra sin distinguir mayúsculas/acentos accidentales.
+  nombreNormalizado String
+  // Hash (HMAC-SHA256) del código secreto que permite a su dueño editar o
+  // borrar esta apuesta. Nunca se almacena el código en claro.
+  codigoHash      String
   golesLocal      Int
   golesVisitante  Int
   createdAt       DateTime @default(now())
 
+  // Un mismo nombre no puede repetirse dentro de la misma porra.
+  @@unique([porraId, nombreNormalizado])
   @@index([porraId])
 }

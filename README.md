@@ -51,10 +51,13 @@ cp .env.example .env
 ```env
 DATABASE_URL="postgresql://usuario:password@host:5432/porra?sslmode=require"
 ADMIN_PIN="1234"
+APUESTA_SECRET="cambia-esto-por-una-cadena-larga-y-aleatoria"
 ```
 
 - **`DATABASE_URL`**: cadena de conexión a tu Postgres.
 - **`ADMIN_PIN`**: PIN secreto para el panel `/admin` y las mutaciones de la API.
+- **`APUESTA_SECRET`** (opcional): secreto para los códigos de cada apuesta. La app
+  funciona sin él (usa un valor por defecto), pero conviene fijarlo en producción.
 
 ### 3. Crear las tablas (migraciones de Prisma)
 
@@ -115,10 +118,22 @@ Cualquiera de estas opciones funciona; copia su cadena de conexión en `DATABASE
 | POST   | `/api/porra`    | Crear la porra (equipos, fecha/hora, precio).          | Sí  |
 | PATCH  | `/api/porra`    | `accion`: `ABRIR` \| `CERRAR` \| `FINALIZAR`.          | Sí  |
 | DELETE | `/api/porra`    | Reiniciar (borra porra y apuestas).                    | Sí  |
-| POST   | `/api/apuestas` | Crear una apuesta (nombre + marcador).                 | No  |
+| POST   | `/api/apuestas` | Crear una apuesta (nombre **único** + marcador). Devuelve un código secreto. | No  |
+| PATCH  | `/api/apuestas/:id` | Editar el marcador de una apuesta (requiere su código). | Código |
+| DELETE | `/api/apuestas/:id` | Borrar una apuesta (código de su dueño **o** PIN de admin). | Código/PIN |
 
 El PIN se envía en la cabecera `x-admin-pin` (o en el cuerpo como `pin`). Si es incorrecto,
 la API responde **401**. Si la porra está completa o cerrada al apostar, responde **409**.
+
+### Identidad de las apuestas
+
+- **Nombre único por porra**: no se admiten dos apuestas con el mismo nombre (sin
+  distinguir mayúsculas ni espacios). Si se repite, la API responde **409**.
+- **Código por apuesta**: al apostar, el servidor genera un código (p. ej. `K7M2QP`) que
+  se muestra una sola vez y se guarda en el navegador. Permite **editar o borrar** esa
+  apuesta mientras la porra siga **abierta**. En la base de datos sólo se almacena su hash.
+- **Rescate del administrador**: desde `/admin` se puede borrar cualquier apuesta (útil si
+  alguien pierde su código), salvo una vez finalizada la porra.
 
 ---
 

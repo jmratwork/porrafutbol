@@ -1,15 +1,18 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { obtenerEstadoActual, obtenerPorraActiva } from "@/lib/estado";
-import { validarGoles, validarNombre } from "@/lib/validation";
+import { normalizarNombre, validarGoles, validarNombre } from "@/lib/validation";
+import { generarCodigo, hashCodigo } from "@/lib/codigo";
 import { MAX_APOSTANTES } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 /**
  * POST /api/apuestas → crear una apuesta.
- * Valida: porra ABIERTA, < 20 apuestas, nombre no vacío, goles 0–20 enteros.
- * Devuelve 409 si la porra está completa o cerrada.
+ * Valida: porra ABIERTA, < 20 apuestas, nombre no vacío y único en la porra,
+ * goles 0–20 enteros. Genera un código secreto para que su dueño la gestione.
+ * Devuelve 409 si la porra está completa/cerrada o el nombre ya existe.
  */
 export async function POST(req: Request) {
   let body: Record<string, unknown>;
@@ -53,10 +56,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: vVis.error }, { status: 400 });
   }
 
+  const nombreNormalizado = normalizarNombre(vNombre.data);
+  const codigo = generarCodigo();
+  const codigoHash = hashCodigo(codigo);
+
   try {
-    // Re-comprobación del límite dentro de una transacción para evitar
-    // condiciones de carrera al acercarse a las 20 apuestas.
-    await prisma.$transaction(async (tx) => {
+    // Re-comprobación del límite, el estado y la unicidad dentro de una
+    // transacción para evitar condiciones de carrera al acercarse a las 20
+    // apuestas o ante envíos simultáneos del mismo nombre.
+    const apuestaId = await prisma.$transaction(async (tx) => {
       const count = await tx.apuesta.count({ where: { porraId: porra.id } });
       if (count >= MAX_APOSTANTES) {
         throw new Error("PORRA_COMPLETA");
@@ -65,15 +73,29 @@ export async function POST(req: Request) {
       if (!actual || actual.estado !== "ABIERTA") {
         throw new Error("PORRA_NO_ABIERTA");
       }
-      await tx.apuesta.create({
+      const duplicada = await tx.apuesta.findFirst({
+        where: { porraId: porra.id, nombreNormalizado },
+        select: { id: true },
+      });
+      if (duplicada) {
+        throw new Error("NOMBRE_DUPLICADO");
+      }
+      const creada = await tx.apuesta.create({
         data: {
           porraId: porra.id,
           nombre: vNombre.data!,
+          nombreNormalizado,
+          codigoHash,
           golesLocal: vLocal.data!,
           golesVisitante: vVis.data!,
         },
+        select: { id: true },
       });
+      return creada.id;
     });
+
+    const estado = await obtenerEstadoActual();
+    return NextResponse.json({ estado, apuestaId, codigo }, { status: 201 });
   } catch (e) {
     if (e instanceof Error && e.message === "PORRA_COMPLETA") {
       return NextResponse.json({ error: "Porra completa." }, { status: 409 });
@@ -84,10 +106,17 @@ export async function POST(req: Request) {
         { status: 409 },
       );
     }
+    // Nombre duplicado: detectado por la pre-comprobación o por el índice único.
+    if (
+      (e instanceof Error && e.message === "NOMBRE_DUPLICADO") ||
+      (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")
+    ) {
+      return NextResponse.json(
+        { error: "Ya existe una apuesta con ese nombre. Elige otro." },
+        { status: 409 },
+      );
+    }
     console.error("POST /api/apuestas", e);
     return NextResponse.json({ error: "No se pudo registrar la apuesta." }, { status: 500 });
   }
-
-  const estado = await obtenerEstadoActual();
-  return NextResponse.json(estado, { status: 201 });
 }

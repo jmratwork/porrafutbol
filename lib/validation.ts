@@ -27,6 +27,14 @@ export function validarGoles(valor: unknown, etiqueta: string): ResultadoValidac
 }
 
 /**
+ * Normaliza un nombre para comprobar unicidad por porra: minúsculas y espacios
+ * colapsados. No distingue "Marta", "marta" ni "marta " como nombres distintos.
+ */
+export function normalizarNombre(nombre: string): string {
+  return nombre.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/**
  * Valida y normaliza (trim) un nombre de apostante.
  */
 export function validarNombre(valor: unknown): ResultadoValidacion<string> {
