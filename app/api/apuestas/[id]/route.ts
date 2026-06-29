@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { obtenerEstadoActual } from "@/lib/estado";
+import { admiteApuestas, obtenerEstadoActual } from "@/lib/estado";
 import { validarGoles } from "@/lib/validation";
 import { compararCodigo } from "@/lib/codigo";
 import { extraerPin, pinValido } from "@/lib/auth";
@@ -40,9 +40,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ error: "Código incorrecto." }, { status: 401 });
   }
 
-  if (apuesta.porra.estado !== "ABIERTA") {
+  if (!admiteApuestas(apuesta.porra)) {
     return NextResponse.json(
-      { error: "La porra ya no admite cambios." },
+      { error: "La porra ya no admite cambios (cerrada o el partido ya ha comenzado)." },
       { status: 409 },
     );
   }
@@ -107,10 +107,11 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
       { status: 409 },
     );
   }
-  // El dueño (sin ser admin) sólo puede borrar mientras siga abierta.
-  if (esDueno && !esAdmin && apuesta.porra.estado !== "ABIERTA") {
+  // El dueño (sin ser admin) sólo puede borrar mientras siga admitiendo apuestas
+  // (abierta y antes del inicio del partido).
+  if (esDueno && !esAdmin && !admiteApuestas(apuesta.porra)) {
     return NextResponse.json(
-      { error: "La porra ya no admite cambios." },
+      { error: "La porra ya no admite cambios (cerrada o el partido ya ha comenzado)." },
       { status: 409 },
     );
   }

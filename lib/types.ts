@@ -44,6 +44,8 @@ export interface EstadoActualDTO {
   numApuestas: number;
   bote: number;
   completa: boolean;
+  // true sólo si la porra está ABIERTA y el partido aún no ha comenzado.
+  admiteApuestas: boolean;
   ganadores: GanadorDTO[];
 }
 

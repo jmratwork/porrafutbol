@@ -37,6 +37,13 @@ export async function POST(req: Request) {
     );
   }
 
+  if (new Date() >= porra.fechaPartido) {
+    return NextResponse.json(
+      { error: "El partido ya ha comenzado. Las apuestas están cerradas." },
+      { status: 409 },
+    );
+  }
+
   if (porra.apuestas.length >= MAX_APOSTANTES) {
     return NextResponse.json({ error: "Porra completa." }, { status: 409 });
   }
@@ -73,6 +80,9 @@ export async function POST(req: Request) {
       if (!actual || actual.estado !== "ABIERTA") {
         throw new Error("PORRA_NO_ABIERTA");
       }
+      if (new Date() >= actual.fechaPartido) {
+        throw new Error("PARTIDO_COMENZADO");
+      }
       const duplicada = await tx.apuesta.findFirst({
         where: { porraId: porra.id, nombreNormalizado },
         select: { id: true },
@@ -103,6 +113,12 @@ export async function POST(req: Request) {
     if (e instanceof Error && e.message === "PORRA_NO_ABIERTA") {
       return NextResponse.json(
         { error: "La porra no admite apuestas en este momento." },
+        { status: 409 },
+      );
+    }
+    if (e instanceof Error && e.message === "PARTIDO_COMENZADO") {
+      return NextResponse.json(
+        { error: "El partido ya ha comenzado. Las apuestas están cerradas." },
         { status: 409 },
       );
     }

@@ -125,6 +125,10 @@ Cualquiera de estas opciones funciona; copia su cadena de conexión en `DATABASE
 El PIN se envía en la cabecera `x-admin-pin` (o en el cuerpo como `pin`). Si es incorrecto,
 la API responde **401**. Si la porra está completa o cerrada al apostar, responde **409**.
 
+**Cierre automático**: las apuestas se cierran solas al llegar la **hora de inicio del
+partido**, aunque el organizador no la cierre a mano. A partir de ese momento la API
+rechaza nuevas apuestas y ediciones (**409**) y la interfaz lo refleja al instante.
+
 ### Identidad de las apuestas
 
 - **Nombre único por porra**: no se admiten dos apuestas con el mismo nombre (sin

@@ -89,6 +89,18 @@ export default function HomePage() {
     cargar();
   }, [cargar]);
 
+  // Cierre automático: programa una recarga justo cuando empieza el partido,
+  // para que la interfaz refleje el cierre sin necesidad de recargar la página.
+  useEffect(() => {
+    const p = estado?.porra;
+    if (!p || p.estado !== "ABIERTA") return;
+    const ms = new Date(p.fechaPartido).getTime() - Date.now();
+    // setTimeout desborda por encima de ~24,8 días; sólo programamos si está cerca.
+    if (ms <= 0 || ms > 2_147_483_000) return;
+    const id = setTimeout(() => cargar(), ms + 500);
+    return () => clearTimeout(id);
+  }, [estado?.porra, cargar]);
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setEnviando(true);
@@ -243,10 +255,13 @@ export default function HomePage() {
     );
   }
 
-  const abierta = porra.estado === "ABIERTA";
   const finalizada = porra.estado === "FINALIZADA";
   const completa = estado!.completa;
-  const puedeApostar = abierta && !completa;
+  const admite = estado!.admiteApuestas;
+  // Abierta en la BD pero el partido ya ha comenzado: cerrada automáticamente.
+  const cerradaPorHora = porra.estado === "ABIERTA" && !admite && !finalizada;
+  const estadoVisible = cerradaPorHora ? "CERRADA" : porra.estado;
+  const puedeApostar = admite && !completa;
   const pctOcupacion = Math.min(100, Math.round((estado!.numApuestas / MAX_APOSTANTES) * 100));
 
   return (
@@ -266,9 +281,10 @@ export default function HomePage() {
           <div className="mt-6 flex flex-col items-center gap-3 text-center">
             <span className="text-sm font-medium text-slate-400">
               {formatearFecha(porra.fechaPartido)}
+              <span className="text-slate-500"> · hora de Barcelona</span>
             </span>
             {!finalizada && <CuentaAtras fechaISO={porra.fechaPartido} />}
-            <EstadoBadge estado={porra.estado} />
+            <EstadoBadge estado={estadoVisible} />
           </div>
         </div>
       </header>
@@ -344,12 +360,20 @@ export default function HomePage() {
         <section className="mt-6 card p-5 sm:p-6">
           <h2 className="mb-4 text-lg font-bold text-white">Haz tu apuesta</h2>
 
-          {!abierta && (
+          {!admite && (
             <p className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-200">
-              La porra está <strong>cerrada</strong>. Ya no se aceptan nuevas apuestas.
+              {cerradaPorHora ? (
+                <>
+                  Las apuestas se <strong>cerraron</strong> al comenzar el partido.
+                </>
+              ) : (
+                <>
+                  La porra está <strong>cerrada</strong>. Ya no se aceptan nuevas apuestas.
+                </>
+              )}
             </p>
           )}
-          {abierta && completa && (
+          {admite && completa && (
             <p className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm font-semibold text-amber-200">
               Porra completa ({MAX_APOSTANTES}/{MAX_APOSTANTES}). No se admiten más apuestas.
             </p>
@@ -467,7 +491,7 @@ export default function HomePage() {
                       <span className="font-mono text-sm font-bold tabular-nums text-slate-300">
                         {a.golesLocal} - {a.golesVisitante}
                       </span>
-                      {abierta && (
+                      {admite && (
                         <button
                           onClick={() => (gestionando ? cerrarGestion() : abrirGestion(a))}
                           className="rounded-lg border border-white/10 px-2 py-1 text-xs font-semibold text-slate-300 transition hover:bg-white/[0.06]"

@@ -132,9 +132,7 @@ export default function AdminPage() {
           className="input"
         />
         <p className="mt-2 text-xs text-slate-400">
-          Se valida contra la variable de entorno{" "}
-          <code className="rounded bg-white/10 px-1 py-0.5 text-slate-200">ADMIN_PIN</code>.
-          Necesario para todas las acciones.
+          Necesario para todas las acciones de administración.
         </p>
       </section>
 
@@ -174,8 +172,9 @@ function CrearPorra({ trabajando, peticion }: { trabajando: boolean; peticion: P
       {
         equipoLocal,
         equipoVisitante,
-        // datetime-local devuelve hora local sin zona; lo convertimos a ISO.
-        fechaPartido: fecha ? new Date(fecha).toISOString() : "",
+        // Se envía la hora de pared tal cual; el servidor la interpreta SIEMPRE
+        // como hora de Barcelona, sin depender de la zona del organizador.
+        fechaPartido: fecha,
         precio: precio === "" ? null : Number(precio),
       },
       "Porra creada correctamente.",
@@ -216,7 +215,7 @@ function CrearPorra({ trabajando, peticion }: { trabajando: boolean; peticion: P
         </div>
         <div>
           <label htmlFor="fecha" className="label">
-            Fecha y hora del partido
+            Fecha y hora del partido <span className="text-slate-400">(hora de Barcelona)</span>
           </label>
           <input
             id="fecha"
@@ -263,6 +262,8 @@ function GestionPorra({
   eliminarApuesta: (id: string) => void;
 }) {
   const porra = estado.porra!;
+  // Abierta en la BD pero el partido ya empezó: cerrada automáticamente por hora.
+  const cerradaPorHora = porra.estado === "ABIERTA" && !estado.admiteApuestas;
   const [resLocal, setResLocal] = useState("");
   const [resVisitante, setResVisitante] = useState("");
   const [confirmarReinicio, setConfirmarReinicio] = useState(false);
@@ -294,7 +295,12 @@ function GestionPorra({
         </h2>
         <dl className="grid grid-cols-2 gap-y-2 text-sm">
           <dt className="text-slate-400">Estado</dt>
-          <dd className="text-right font-semibold text-slate-100">{porra.estado}</dd>
+          <dd className="text-right font-semibold text-slate-100">
+            {porra.estado}
+            {cerradaPorHora && (
+              <span className="ml-1 font-normal text-amber-300">(cerrada por hora)</span>
+            )}
+          </dd>
           <dt className="text-slate-400">Fecha</dt>
           <dd className="text-right text-slate-100">{formatearFecha(porra.fechaPartido)}</dd>
           <dt className="text-slate-400">Precio</dt>

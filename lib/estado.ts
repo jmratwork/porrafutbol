@@ -4,6 +4,17 @@ import { calcularBote, calcularGanadores } from "./porra";
 import { MAX_APOSTANTES } from "./types";
 import type { ApuestaDTO, EstadoActualDTO, PorraDTO } from "./types";
 
+/**
+ * ¿Se admiten apuestas ahora mismo? Sólo si la porra está ABIERTA y el partido
+ * aún no ha comenzado. Las apuestas se cierran solas al llegar la hora de inicio.
+ */
+export function admiteApuestas(
+  porra: Pick<Porra, "estado" | "fechaPartido">,
+  ahora: Date = new Date(),
+): boolean {
+  return porra.estado === "ABIERTA" && ahora.getTime() < porra.fechaPartido.getTime();
+}
+
 function serializarPorra(porra: Porra): PorraDTO {
   return {
     id: porra.id,
@@ -44,6 +55,7 @@ export async function obtenerEstadoActual(): Promise<EstadoActualDTO> {
       numApuestas: 0,
       bote: 0,
       completa: false,
+      admiteApuestas: false,
       ganadores: [],
     };
   }
@@ -58,6 +70,7 @@ export async function obtenerEstadoActual(): Promise<EstadoActualDTO> {
     numApuestas,
     bote,
     completa: numApuestas >= MAX_APOSTANTES,
+    admiteApuestas: admiteApuestas(porra),
     ganadores,
   };
 }

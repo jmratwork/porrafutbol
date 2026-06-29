@@ -1,4 +1,5 @@
 import { MAX_GOLES, MAX_NOMBRE, MIN_GOLES } from "./types";
+import { parseFechaBarcelona } from "./fecha";
 
 export interface ResultadoValidacion<T> {
   ok: boolean;
@@ -80,8 +81,9 @@ export function validarPorra(body: Record<string, unknown>): ResultadoValidacion
   if (typeof fechaRaw !== "string" || fechaRaw.length === 0) {
     return { ok: false, error: "La fecha y hora del partido son obligatorias." };
   }
-  const fechaPartido = new Date(fechaRaw);
-  if (Number.isNaN(fechaPartido.getTime())) {
+  // La hora del formulario se interpreta SIEMPRE como hora de Barcelona.
+  const fechaPartido = parseFechaBarcelona(fechaRaw);
+  if (!fechaPartido) {
     return { ok: false, error: "La fecha y hora del partido no son válidas." };
   }
 
