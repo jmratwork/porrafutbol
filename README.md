@@ -100,21 +100,20 @@ Cualquiera de estas opciones funciona; copia su cadena de conexión en `DATABASE
 2. En **Settings → Environment Variables** añade:
    - `DATABASE_URL` (si usas Vercel Postgres se añade sola al crear la base de datos).
    - `ADMIN_PIN` (mínimo 12 caracteres) y `APUESTA_SECRET` (cadena larga y aleatoria).
-3. **Aplica las migraciones como paso deliberado** (no se hacen solas en el build, a
-   propósito: así un push de código nunca modifica el esquema de producción sin querer).
-   Antes del primer despliegue —y cada vez que añadas una migración— ejecuta con la
-   `DATABASE_URL` de **producción**:
-   ```bash
-   npm run db:migrate   # = prisma migrate deploy
-   ```
-   Revisa el SQL de la migración antes de aplicarlo y asegúrate de tener copia/PITR
-   activado en tu proveedor (Neon/Supabase/Vercel Postgres) por si hay que revertir.
-4. **Deploy.** Vercel ejecuta `vercel-build` (`prisma generate && next build`); ya no
-   incluye `migrate deploy`.
-5. Abre tu dominio de Vercel, entra en `/admin`, introduce el `ADMIN_PIN` y crea la porra.
+3. **Deploy.** No hace falta configurar nada más: Vercel detecta el script
+   `vercel-build` del `package.json`, que ejecuta automáticamente
+   `prisma generate && prisma migrate deploy && next build`. Es decir, **las tablas se
+   crean (y migran) solas** en producción en cada despliegue.
+4. Abre tu dominio de Vercel, entra en `/admin`, introduce el `ADMIN_PIN` y crea la porra.
 
-> **Nota:** la migración y el despliegue de código están desacoplados a propósito. Aplica
-> siempre las migraciones **antes** de desplegar código que dependa del nuevo esquema.
+> **Seguridad de las migraciones.** `prisma migrate deploy` sólo aplica migraciones ya
+> commiteadas en `prisma/migrations/` (nunca genera cambios por su cuenta). Para que ese
+> automatismo sea seguro: **revisa el SQL de cada migración en el PR antes de mergear**
+> (especialmente operaciones destructivas como `DROP`/`TRUNCATE`) y mantén **PITR/copias**
+> activadas en tu proveedor (Neon/Supabase/Vercel Postgres) por si hay que revertir.
+
+> Si prefieres aplicar las migraciones manualmente, usa la `DATABASE_URL` de producción y
+> ejecuta `npm run db:migrate` (= `prisma migrate deploy`) desde tu máquina.
 
 ---
 
