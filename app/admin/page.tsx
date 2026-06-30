@@ -5,20 +5,14 @@ import { Toast, type ToastData } from "@/components/Toast";
 import { formatearEuros, formatearFecha } from "@/lib/format";
 import { MAX_APOSTANTES, MAX_GOLES, type EstadoActualDTO } from "@/lib/types";
 
-const PIN_STORAGE_KEY = "porra_admin_pin";
-
 export default function AdminPage() {
   const [estado, setEstado] = useState<EstadoActualDTO | null>(null);
   const [cargando, setCargando] = useState(true);
+  // El PIN se mantiene SÓLO en memoria durante la vida de la página; no se
+  // persiste en sessionStorage/localStorage para no exponerlo ante un XSS.
   const [pin, setPin] = useState("");
   const [toast, setToast] = useState<ToastData | null>(null);
   const [trabajando, setTrabajando] = useState(false);
-
-  // Recupera el PIN guardado en sesión (comodidad, no es seguridad real).
-  useEffect(() => {
-    const guardado = sessionStorage.getItem(PIN_STORAGE_KEY);
-    if (guardado) setPin(guardado);
-  }, []);
 
   const cargar = useCallback(async () => {
     try {
@@ -58,7 +52,6 @@ export default function AdminPage() {
         setToast({ tipo: "error", mensaje: data.error ?? "Operación fallida." });
         return false;
       }
-      sessionStorage.setItem(PIN_STORAGE_KEY, pin);
       setEstado(data);
       setToast({ tipo: "exito", mensaje: mensajeExito });
       return true;
@@ -88,7 +81,6 @@ export default function AdminPage() {
         setToast({ tipo: "error", mensaje: data.error ?? "No se pudo borrar la apuesta." });
         return;
       }
-      sessionStorage.setItem(PIN_STORAGE_KEY, pin);
       setEstado(data);
       setToast({ tipo: "exito", mensaje: "Apuesta borrada." });
     } catch {
@@ -132,7 +124,8 @@ export default function AdminPage() {
           className="input"
         />
         <p className="mt-2 text-xs text-slate-400">
-          Necesario para todas las acciones de administración.
+          Necesario para todas las acciones de administración. Por seguridad no se guarda:
+          tendrás que introducirlo en cada sesión.
         </p>
       </section>
 
