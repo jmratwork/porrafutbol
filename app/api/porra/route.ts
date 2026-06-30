@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { obtenerEstadoActual, obtenerPorraActiva } from "@/lib/estado";
 import { validarGoles, validarPorra } from "@/lib/validation";
 import { extraerPin, pinValido } from "@/lib/auth";
+import { ipDe, limpiarFallos, rateLimitOk, registrarFallo } from "@/lib/rateLimit";
 
 // Esta API depende de la base de datos: nunca debe cachearse.
 export const dynamic = "force-dynamic";
@@ -35,9 +36,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Cuerpo de la petición no válido." }, { status: 400 });
   }
 
-  if (!pinValido(extraerPin(req, body))) {
+  const ip = ipDe(req);
+  if (!rateLimitOk(ip)) {
+    return NextResponse.json(
+      { error: "Demasiados intentos. Espera unos minutos." },
+      { status: 429 },
+    );
+  }
+  if (!pinValido(extraerPin(req))) {
+    registrarFallo(ip);
     return NextResponse.json({ error: "PIN incorrecto." }, { status: 401 });
   }
+  limpiarFallos(ip);
 
   const existente = await obtenerPorraActiva();
   if (existente) {
@@ -83,9 +93,18 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Cuerpo de la petición no válido." }, { status: 400 });
   }
 
-  if (!pinValido(extraerPin(req, body))) {
+  const ip = ipDe(req);
+  if (!rateLimitOk(ip)) {
+    return NextResponse.json(
+      { error: "Demasiados intentos. Espera unos minutos." },
+      { status: 429 },
+    );
+  }
+  if (!pinValido(extraerPin(req))) {
+    registrarFallo(ip);
     return NextResponse.json({ error: "PIN incorrecto." }, { status: 401 });
   }
+  limpiarFallos(ip);
 
   const porra = await obtenerPorraActiva();
   if (!porra) {
@@ -118,6 +137,12 @@ export async function PATCH(req: Request) {
         data: { estado: "CERRADA" },
       });
     } else if (accion === "FINALIZAR") {
+      if (porra.estado === "FINALIZADA") {
+        return NextResponse.json(
+          { error: "La porra ya está finalizada. No se puede modificar el resultado." },
+          { status: 409 },
+        );
+      }
       const vLocal = validarGoles(body.resultadoLocal, "el equipo local");
       if (!vLocal.ok || vLocal.data === undefined) {
         return NextResponse.json({ error: vLocal.error }, { status: 400 });
@@ -164,9 +189,18 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "Cuerpo de la petición no válido." }, { status: 400 });
   }
 
-  if (!pinValido(extraerPin(req, body))) {
+  const ip = ipDe(req);
+  if (!rateLimitOk(ip)) {
+    return NextResponse.json(
+      { error: "Demasiados intentos. Espera unos minutos." },
+      { status: 429 },
+    );
+  }
+  if (!pinValido(extraerPin(req))) {
+    registrarFallo(ip);
     return NextResponse.json({ error: "PIN incorrecto." }, { status: 401 });
   }
+  limpiarFallos(ip);
 
   try {
     // Borra todas las porras (y sus apuestas en cascada).

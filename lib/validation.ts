@@ -62,6 +62,9 @@ export interface DatosPorra {
   precio: number;
 }
 
+// Cota superior razonable para el precio de una apuesta (evita botes absurdos).
+export const MAX_PRECIO = 10000;
+
 export function validarPorra(body: Record<string, unknown>): ResultadoValidacion<DatosPorra> {
   const equipoLocal = typeof body.equipoLocal === "string" ? body.equipoLocal.trim() : "";
   const equipoVisitante =
@@ -88,8 +91,16 @@ export function validarPorra(body: Record<string, unknown>): ResultadoValidacion
   }
 
   const precioNum = typeof body.precio === "string" ? Number(body.precio) : body.precio;
-  if (typeof precioNum !== "number" || !Number.isFinite(precioNum) || precioNum <= 0) {
-    return { ok: false, error: "El precio debe ser un número mayor que 0." };
+  if (
+    typeof precioNum !== "number" ||
+    !Number.isFinite(precioNum) ||
+    precioNum <= 0 ||
+    precioNum > MAX_PRECIO
+  ) {
+    return {
+      ok: false,
+      error: `El precio debe ser un número entre 0,01 € y ${MAX_PRECIO} €.`,
+    };
   }
 
   return {

@@ -4,6 +4,7 @@ import { admiteApuestas, obtenerEstadoActual } from "@/lib/estado";
 import { validarGoles } from "@/lib/validation";
 import { compararCodigo } from "@/lib/codigo";
 import { extraerPin, pinValido } from "@/lib/auth";
+import { ipDe, limpiarFallos, rateLimitOk, registrarFallo } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ error: "Cuerpo de la petición no válido." }, { status: 400 });
   }
 
+  const ip = ipDe(req);
+  if (!rateLimitOk(ip)) {
+    return NextResponse.json(
+      { error: "Demasiados intentos. Espera unos minutos." },
+      { status: 429 },
+    );
+  }
+
   const apuesta = await prisma.apuesta.findUnique({
     where: { id: params.id },
     include: { porra: true },
@@ -37,8 +46,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const codigo = extraerCodigo(req, body);
   if (!codigo || !compararCodigo(codigo, apuesta.codigoHash)) {
+    registrarFallo(ip);
     return NextResponse.json({ error: "Código incorrecto." }, { status: 401 });
   }
+  limpiarFallos(ip);
 
   if (!admiteApuestas(apuesta.porra)) {
     return NextResponse.json(
@@ -85,6 +96,14 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     return NextResponse.json({ error: "Cuerpo de la petición no válido." }, { status: 400 });
   }
 
+  const ip = ipDe(req);
+  if (!rateLimitOk(ip)) {
+    return NextResponse.json(
+      { error: "Demasiados intentos. Espera unos minutos." },
+      { status: 429 },
+    );
+  }
+
   const apuesta = await prisma.apuesta.findUnique({
     where: { id: params.id },
     include: { porra: true },
@@ -95,11 +114,13 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
 
   const codigo = extraerCodigo(req, body);
   const esDueno = !!codigo && compararCodigo(codigo, apuesta.codigoHash);
-  const esAdmin = pinValido(extraerPin(req, body));
+  const esAdmin = pinValido(extraerPin(req));
 
   if (!esDueno && !esAdmin) {
+    registrarFallo(ip);
     return NextResponse.json({ error: "Código incorrecto." }, { status: 401 });
   }
+  limpiarFallos(ip);
 
   if (apuesta.porra.estado === "FINALIZADA") {
     return NextResponse.json(

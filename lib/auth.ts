@@ -1,6 +1,8 @@
+import { timingSafeEqual } from "node:crypto";
+
 /**
- * Comprueba el PIN de administración contra la variable de entorno ADMIN_PIN.
- * El PIN puede llegar por la cabecera "x-admin-pin" o en el cuerpo de la petición.
+ * Comprueba el PIN de administración contra la variable de entorno ADMIN_PIN
+ * usando comparación en tiempo constante (evita oráculos de temporización).
  */
 export function pinValido(pinRecibido: string | null | undefined): boolean {
   const esperado = process.env.ADMIN_PIN;
@@ -11,15 +13,18 @@ export function pinValido(pinRecibido: string | null | undefined): boolean {
   if (typeof pinRecibido !== "string" || pinRecibido.length === 0) {
     return false;
   }
-  return pinRecibido === esperado;
+  const a = Buffer.from(pinRecibido);
+  const b = Buffer.from(esperado);
+  // timingSafeEqual exige misma longitud; la diferencia de longitud no se
+  // compara byte a byte, pero el espacio de un PIN es acotado y aceptable.
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }
 
 /**
- * Extrae el PIN de una petición: primero de la cabecera, luego del cuerpo.
+ * Extrae el PIN de administración EXCLUSIVAMENTE de la cabecera "x-admin-pin".
+ * No se acepta en el cuerpo para evitar que aparezca en logs de proxies.
  */
-export function extraerPin(req: Request, body?: Record<string, unknown>): string | null {
-  const header = req.headers.get("x-admin-pin");
-  if (header) return header;
-  if (body && typeof body.pin === "string") return body.pin;
-  return null;
+export function extraerPin(req: Request): string | null {
+  return req.headers.get("x-admin-pin");
 }

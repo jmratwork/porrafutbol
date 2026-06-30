@@ -21,12 +21,20 @@ export function generarCodigo(): string {
 }
 
 /**
- * Secreto del servidor (pepper). Si no se configura APUESTA_SECRET, se usa un
- * valor por defecto: el sistema funciona igual, pero conviene fijarlo en
- * producción para que un volcado de la BD no permita fuerza bruta offline.
+ * Secreto del servidor (pepper) para el HMAC de los códigos. Es OBLIGATORIO en
+ * producción: si falta, se aborta en vez de degradar a un valor público (que
+ * permitiría falsificar códigos con un volcado de la BD). En desarrollo se
+ * permite un valor de relleno para no entorpecer las pruebas locales.
  */
 function secreto(): string {
-  return process.env.APUESTA_SECRET || "porra-secreto-por-defecto-cambialo";
+  const s = process.env.APUESTA_SECRET;
+  if (s && s.length > 0) return s;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "APUESTA_SECRET no está configurado. Define un valor largo y aleatorio en el entorno.",
+    );
+  }
+  return "dev-only-no-usar-en-produccion";
 }
 
 /** Normaliza un código tal y como lo escribe el usuario (mayúsculas, sin espacios). */
