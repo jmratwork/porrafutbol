@@ -1,13 +1,28 @@
 import { timingSafeEqual } from "node:crypto";
 
+// Longitud mínima exigida al ADMIN_PIN configurado. Con rate-limiting sólo de
+// apoyo, la longitud del secreto es la defensa real contra la fuerza bruta.
+export const MIN_ADMIN_PIN = 12;
+
 /**
  * Comprueba el PIN de administración contra la variable de entorno ADMIN_PIN
  * usando comparación en tiempo constante (evita oráculos de temporización).
+ *
+ * Un ADMIN_PIN ausente o demasiado corto se trata como configuración inválida:
+ * en producción se bloquean todas las operaciones de admin (con aviso en logs);
+ * en desarrollo se permite un PIN corto para no entorpecer las pruebas locales.
  */
 export function pinValido(pinRecibido: string | null | undefined): boolean {
   const esperado = process.env.ADMIN_PIN;
   if (!esperado) {
     // Sin ADMIN_PIN configurado no se permite ninguna operación de admin.
+    return false;
+  }
+  if (esperado.length < MIN_ADMIN_PIN && process.env.NODE_ENV === "production") {
+    console.error(
+      `ADMIN_PIN demasiado corto (${esperado.length} caracteres); se requieren al menos ` +
+        `${MIN_ADMIN_PIN}. Operaciones de administración bloqueadas hasta configurar un PIN fuerte.`,
+    );
     return false;
   }
   if (typeof pinRecibido !== "string" || pinRecibido.length === 0) {

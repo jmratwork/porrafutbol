@@ -50,14 +50,15 @@ cp .env.example .env
 
 ```env
 DATABASE_URL="postgresql://usuario:password@host:5432/porra?sslmode=require"
-ADMIN_PIN="1234"
+ADMIN_PIN="cambia-esto-por-un-pin-largo-y-aleatorio"
 APUESTA_SECRET="cambia-esto-por-una-cadena-larga-y-aleatoria"
 ```
 
 - **`DATABASE_URL`**: cadena de conexión a tu Postgres.
-- **`ADMIN_PIN`**: PIN secreto para el panel `/admin` y las mutaciones de la API.
-- **`APUESTA_SECRET`** (opcional): secreto para los códigos de cada apuesta. La app
-  funciona sin él (usa un valor por defecto), pero conviene fijarlo en producción.
+- **`ADMIN_PIN`**: secreto para el panel `/admin` y las mutaciones de la API. En producción
+  debe tener **al menos 12 caracteres**; si es más corto, las acciones de admin se bloquean.
+- **`APUESTA_SECRET`**: secreto para los códigos de cada apuesta. **Obligatorio en producción**
+  (si falta, el servidor aborta en vez de usar un valor por defecto público).
 
 ### 3. Crear las tablas (migraciones de Prisma)
 
