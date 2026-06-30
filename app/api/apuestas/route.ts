@@ -64,10 +64,14 @@ export async function POST(req: Request) {
   }
 
   const nombreNormalizado = normalizarNombre(vNombre.data);
-  const codigo = generarCodigo();
-  const codigoHash = hashCodigo(codigo);
 
   try {
+    // La generación del código va dentro del try: si falta APUESTA_SECRET en
+    // producción, hashCodigo() lanza y debe devolverse un 500 JSON claro (no
+    // una página de error que el cliente interpretaría como "Error de red").
+    const codigo = generarCodigo();
+    const codigoHash = hashCodigo(codigo);
+
     // Re-comprobación del límite, el estado y la unicidad dentro de una
     // transacción para evitar condiciones de carrera al acercarse a las 20
     // apuestas o ante envíos simultáneos del mismo nombre.
