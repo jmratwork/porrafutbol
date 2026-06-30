@@ -29,7 +29,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
 
   const ip = ipDe(req);
-  if (!rateLimitOk(ip)) {
+  if (!(await rateLimitOk(ip))) {
     return NextResponse.json(
       { error: "Demasiados intentos. Espera unos minutos." },
       { status: 429 },
@@ -46,10 +46,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const codigo = extraerCodigo(req, body);
   if (!codigo || !compararCodigo(codigo, apuesta.codigoHash)) {
-    registrarFallo(ip);
+    await registrarFallo(ip);
     return NextResponse.json({ error: "Código incorrecto." }, { status: 401 });
   }
-  limpiarFallos(ip);
+  await limpiarFallos(ip);
 
   if (!admiteApuestas(apuesta.porra)) {
     return NextResponse.json(
@@ -97,7 +97,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   }
 
   const ip = ipDe(req);
-  if (!rateLimitOk(ip)) {
+  if (!(await rateLimitOk(ip))) {
     return NextResponse.json(
       { error: "Demasiados intentos. Espera unos minutos." },
       { status: 429 },
@@ -117,10 +117,10 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   const esAdmin = pinValido(extraerPin(req));
 
   if (!esDueno && !esAdmin) {
-    registrarFallo(ip);
+    await registrarFallo(ip);
     return NextResponse.json({ error: "Código incorrecto." }, { status: 401 });
   }
-  limpiarFallos(ip);
+  await limpiarFallos(ip);
 
   if (apuesta.porra.estado === "FINALIZADA") {
     return NextResponse.json(

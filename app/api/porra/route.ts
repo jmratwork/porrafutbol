@@ -37,17 +37,17 @@ export async function POST(req: Request) {
   }
 
   const ip = ipDe(req);
-  if (!rateLimitOk(ip)) {
+  if (!(await rateLimitOk(ip))) {
     return NextResponse.json(
       { error: "Demasiados intentos. Espera unos minutos." },
       { status: 429 },
     );
   }
   if (!pinValido(extraerPin(req))) {
-    registrarFallo(ip);
+    await registrarFallo(ip);
     return NextResponse.json({ error: "PIN incorrecto." }, { status: 401 });
   }
-  limpiarFallos(ip);
+  await limpiarFallos(ip);
 
   const existente = await obtenerPorraActiva();
   if (existente) {
@@ -94,17 +94,17 @@ export async function PATCH(req: Request) {
   }
 
   const ip = ipDe(req);
-  if (!rateLimitOk(ip)) {
+  if (!(await rateLimitOk(ip))) {
     return NextResponse.json(
       { error: "Demasiados intentos. Espera unos minutos." },
       { status: 429 },
     );
   }
   if (!pinValido(extraerPin(req))) {
-    registrarFallo(ip);
+    await registrarFallo(ip);
     return NextResponse.json({ error: "PIN incorrecto." }, { status: 401 });
   }
-  limpiarFallos(ip);
+  await limpiarFallos(ip);
 
   const porra = await obtenerPorraActiva();
   if (!porra) {
@@ -190,17 +190,17 @@ export async function DELETE(req: Request) {
   }
 
   const ip = ipDe(req);
-  if (!rateLimitOk(ip)) {
+  if (!(await rateLimitOk(ip))) {
     return NextResponse.json(
       { error: "Demasiados intentos. Espera unos minutos." },
       { status: 429 },
     );
   }
   if (!pinValido(extraerPin(req))) {
-    registrarFallo(ip);
+    await registrarFallo(ip);
     return NextResponse.json({ error: "PIN incorrecto." }, { status: 401 });
   }
-  limpiarFallos(ip);
+  await limpiarFallos(ip);
 
   try {
     // Borra todas las porras (y sus apuestas en cascada).
