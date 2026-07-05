@@ -392,7 +392,7 @@ export default function HomePage() {
                   maxLength={40}
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
-                  placeholder="Ej. Marta"
+                  placeholder="Ej. Pau"
                   className="input"
                 />
                 <p className="mt-1 text-xs text-slate-500">
