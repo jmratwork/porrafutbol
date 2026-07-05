@@ -169,7 +169,7 @@ Sea el **resultado real** `LR - VR` y cada apuesta `LA - VA`.
 ### Ejemplo 2 — nadie acierta, gana el más cercano
 
 - Precio: 3 €. Apuestas (5): Ana `1-0` (d=2), Luis `3-1` (d=2), Eva `2-2` (d=3),
-  Sara `2-0` (d=1), Tom `0-3` (d=5). Resultado real: **2-1**.
+  Sara `2-0` (d=1), Nuria `0-3` (d=5). Resultado real: **2-1**.
 - Bote = 5 × 3 = **15 €**. Distancia mínima = 1 (Sara) → Sara gana **15,00 €**.
 - Si Sara no existiera, empatarían Ana y Luis (d=2) → 15 / 2 = **7,50 € cada uno**.
 
