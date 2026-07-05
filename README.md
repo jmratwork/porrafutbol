@@ -1,6 +1,6 @@
 # ⚽ Porra de fútbol
 
-Aplicación web para organizar una **porra** alrededor de un único partido de fútbol
+Aplicación Web para organizar una **porra** alrededor de un único partido de fútbol
 (local vs visitante). Hasta **20 apostantes** pronostican el marcador exacto; el bote se
 reparte entre quien acierta (o, si nadie acierta, entre los más cercanos).
 
