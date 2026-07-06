@@ -2,9 +2,13 @@ import { NextResponse } from "next/server";
 import { obtenerPorraActiva } from "@/lib/estado";
 import { normalizarNombre, validarNombre } from "@/lib/validation";
 import { extraerPin, pinValido } from "@/lib/auth";
+import { ipDe, limpiarFallos, rateLimitOk, registrarFallo } from "@/lib/rateLimit";
 import { firmarInvitacion } from "@/lib/invitacion";
 
 export const dynamic = "force-dynamic";
+
+// Tope de nombres por petición (evita cuerpos gigantes aunque venga con PIN).
+const MAX_NOMBRES = 100;
 
 /**
  * POST /api/invitaciones → genera un enlace de invitación por nombre (requiere PIN).
@@ -19,9 +23,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Cuerpo de la petición no válido." }, { status: 400 });
   }
 
+  const ip = ipDe(req);
+  if (!(await rateLimitOk(ip))) {
+    return NextResponse.json(
+      { error: "Demasiados intentos. Espera unos minutos." },
+      { status: 429 },
+    );
+  }
   if (!pinValido(extraerPin(req))) {
+    await registrarFallo(ip);
     return NextResponse.json({ error: "No autorizado." }, { status: 403 });
   }
+  await limpiarFallos(ip);
 
   const porra = await obtenerPorraActiva();
   if (!porra) {
@@ -29,6 +42,12 @@ export async function POST(req: Request) {
   }
 
   const nombresRaw = Array.isArray(body.nombres) ? body.nombres : [];
+  if (nombresRaw.length > MAX_NOMBRES) {
+    return NextResponse.json(
+      { error: `Demasiados nombres (máximo ${MAX_NOMBRES}).` },
+      { status: 400 },
+    );
+  }
   const vistos = new Set<string>();
   const invitaciones: { nombre: string; url: string }[] = [];
 

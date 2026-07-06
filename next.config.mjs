@@ -12,6 +12,7 @@ const nextConfig = {
       "img-src 'self' data:",
       "font-src 'self' data:",
       "connect-src 'self'",
+      "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self'",
       "frame-ancestors 'none'",
