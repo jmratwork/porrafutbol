@@ -10,6 +10,10 @@ export const viewport: Viewport = {
   themeColor: "#04100a",
 };
 
+// La CSP basada en nonce (middleware.ts) exige render por petición para que el
+// nonce del HTML coincida con el de la cabecera; forzamos render dinámico.
+export const dynamic = "force-dynamic";
+
 export default function RootLayout({
   children,
 }: {
