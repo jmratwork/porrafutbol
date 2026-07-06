@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { obtenerEstadoActual, obtenerPorraActiva } from "@/lib/estado";
 import { normalizarNombre, validarGoles, validarNombre } from "@/lib/validation";
 import { generarCodigo, hashCodigo } from "@/lib/codigo";
+import { invitacionValida } from "@/lib/invitacion";
+import { ipDe, limpiarFallos, rateLimitOk, registrarFallo } from "@/lib/rateLimit";
 import { MAX_APOSTANTES } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +22,14 @@ export async function POST(req: Request) {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Cuerpo de la petición no válido." }, { status: 400 });
+  }
+
+  const ip = ipDe(req);
+  if (!(await rateLimitOk(ip))) {
+    return NextResponse.json(
+      { error: "Demasiados intentos. Espera unos minutos." },
+      { status: 429 },
+    );
   }
 
   const porra = await obtenerPorraActiva();
@@ -65,6 +75,18 @@ export async function POST(req: Request) {
 
   const nombreNormalizado = normalizarNombre(vNombre.data);
 
+  // Autorización: sólo se puede apostar con una invitación firmada por el admin
+  // para ese nombre exacto en esta porra. Las guardas de estado (porra ABIERTA
+  // y partido no comenzado) ya se han comprobado antes, así que la invitación
+  // caduca sola al cerrar la porra o al empezar el partido.
+  if (!invitacionValida(porra.id, nombreNormalizado, String(body.inv ?? ""))) {
+    await registrarFallo(ip);
+    return NextResponse.json(
+      { error: "Invitación no válida para ese nombre." },
+      { status: 403 },
+    );
+  }
+
   try {
     // La generación del código va dentro del try: si falta APUESTA_SECRET en
     // producción, hashCodigo() lanza y debe devolverse un 500 JSON claro (no
@@ -108,6 +130,7 @@ export async function POST(req: Request) {
       return creada.id;
     });
 
+    await limpiarFallos(ip);
     const estado = await obtenerEstadoActual();
     return NextResponse.json({ estado, apuestaId, codigo }, { status: 201 });
   } catch (e) {

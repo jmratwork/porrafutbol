@@ -52,6 +52,7 @@ cp .env.example .env
 DATABASE_URL="postgresql://usuario:password@host:5432/porra?sslmode=require"
 ADMIN_PIN="cambia-esto-por-un-pin-largo-y-aleatorio"
 APUESTA_SECRET="cambia-esto-por-una-cadena-larga-y-aleatoria"
+INVITE_SECRET="cambia-esto-por-otra-cadena-larga-y-aleatoria"
 ```
 
 - **`DATABASE_URL`**: cadena de conexión a tu Postgres.
@@ -59,6 +60,8 @@ APUESTA_SECRET="cambia-esto-por-una-cadena-larga-y-aleatoria"
   debe tener **al menos 12 caracteres**; si es más corto, las acciones de admin se bloquean.
 - **`APUESTA_SECRET`**: secreto para los códigos de cada apuesta. **Obligatorio en producción**
   (si falta, el servidor aborta en vez de usar un valor por defecto público).
+- **`INVITE_SECRET`**: secreto para firmar las invitaciones (distinto de `APUESTA_SECRET`).
+  **Obligatorio en producción**, con el mismo comportamiento de fallo si falta.
 
 ### 3. Crear las tablas (migraciones de Prisma)
 
@@ -123,26 +126,41 @@ Cualquiera de estas opciones funciona; copia su cadena de conexión en `DATABASE
 | ------ | --------------- | ------------------------------------------------------ | --- |
 | GET    | `/api/porra`    | Estado actual: porra + apuestas + bote + ganadores.    | No  |
 | POST   | `/api/porra`    | Crear la porra (equipos, fecha/hora, precio).          | Sí  |
-| PATCH  | `/api/porra`    | `accion`: `ABRIR` \| `CERRAR` \| `FINALIZAR`.          | Sí  |
+| PATCH  | `/api/porra`    | `accion`: `CERRAR` \| `FINALIZAR` (`ABRIR` ya no reabre; **409**). | Sí  |
 | DELETE | `/api/porra`    | Reiniciar (borra porra y apuestas).                    | Sí  |
-| POST   | `/api/apuestas` | Crear una apuesta (nombre **único** + marcador). Devuelve un código secreto. | No  |
+| POST   | `/api/invitaciones` | Generar enlaces de invitación (`{ nombres: string[] }`). | Sí  |
+| POST   | `/api/apuestas` | Crear una apuesta (requiere **invitación** + marcador). Devuelve un código secreto. | Invitación |
 | PATCH  | `/api/apuestas/:id` | Editar el marcador de una apuesta (requiere su código). | Código |
 | DELETE | `/api/apuestas/:id` | Borrar una apuesta (código de su dueño **o** PIN de admin). | Código/PIN |
 
-El PIN se envía en la cabecera `x-admin-pin` (o en el cuerpo como `pin`). Si es incorrecto,
-la API responde **401**. Si la porra está completa o cerrada al apostar, responde **409**.
+El PIN se envía en la cabecera `x-admin-pin`. Si es incorrecto, la API responde **401**
+(o **403** en `/api/invitaciones`). Si la porra está completa o cerrada al apostar, responde **409**.
 
 **Cierre automático**: las apuestas se cierran solas al llegar la **hora de inicio del
 partido**, aunque el organizador no la cierre a mano. A partir de ese momento la API
 rechaza nuevas apuestas y ediciones (**409**) y la interfaz lo refleja al instante.
 
-### Identidad de las apuestas
+### Identidad de las apuestas: invitaciones firmadas
 
-- **Nombre único por porra**: no se admiten dos apuestas con el mismo nombre (sin
-  distinguir mayúsculas ni espacios). Si se repite, la API responde **409**.
-- **Código por apuesta**: al apostar, el servidor genera un código (p. ej. `K7M2QP`) que
-  se muestra una sola vez y se guarda en el navegador. Permite **editar o borrar** esa
-  apuesta mientras la porra siga **abierta**. En la base de datos sólo se almacena su hash.
+Apostar **no** es abierto: hace falta una **invitación** que el organizador reparte.
+
+- **El admin genera un enlace por persona** (sección *Invitaciones* de `/admin`): un nombre
+  por línea. Cada enlace (`/?nombre=…&inv=…`) autoriza a apostar **exactamente con ese
+  nombre** en la porra activa. La firma (HMAC-SHA256) se calcula **siempre en el servidor**
+  con `INVITE_SECRET`; el cliente nunca ve el secreto.
+- **Solo con ese enlace se puede apostar** bajo ese nombre. Sin `inv` válido, el formulario
+  no deja crear la apuesta y la API responde **403**. El nombre viene precargado y de solo
+  lectura, así que nadie puede suplantar ni "okupar" el nombre de otra persona.
+- **La invitación caduca sola**: su validez es exactamente la ventana en que la porra admite
+  apuestas. Deja de valer **al empezar el partido** o **al cerrar la porra** el admin. Cerrar
+  es **irreversible** (una porra cerrada no se reabre) e invalida todas las invitaciones.
+- **Para empezar de nuevo** se **reinicia** la porra: nace con otro `id`, lo que por sí solo
+  invalida las invitaciones anteriores, y se generan invitaciones nuevas.
+- **Nombre único por porra**: además, no se admiten dos apuestas con el mismo nombre. Esto
+  hace que cada invitación sirva **una sola vez** (no hace falta marcar "usada").
+- **Código por apuesta**: al apostar, el servidor genera un código (p. ej. `K7M2QP`) que se
+  muestra una sola vez y se guarda en el navegador. Permite **editar o borrar** esa apuesta
+  mientras la porra siga abierta. En la base de datos sólo se almacena su hash.
 - **Rescate del administrador**: desde `/admin` se puede borrar cualquier apuesta (útil si
   alguien pierde su código), salvo una vez finalizada la porra.
 

@@ -115,16 +115,15 @@ export async function PATCH(req: Request) {
 
   try {
     if (accion === "ABRIR") {
-      if (porra.estado === "FINALIZADA") {
+      // Una porra cerrada NO se reabre: es irreversible para que las invitaciones
+      // caduquen de forma fiable. La porra nace ABIERTA (en creación y reinicio),
+      // así que ABRIR sólo puede ser un no-op sobre una porra ya abierta.
+      if (porra.estado !== "ABIERTA") {
         return NextResponse.json(
-          { error: "No se puede reabrir una porra finalizada." },
+          { error: "Una porra cerrada no se puede reabrir. Reiníciala para empezar de nuevo." },
           { status: 409 },
         );
       }
-      await prisma.porra.update({
-        where: { id: porra.id },
-        data: { estado: "ABIERTA" },
-      });
     } else if (accion === "CERRAR") {
       if (porra.estado === "FINALIZADA") {
         return NextResponse.json(

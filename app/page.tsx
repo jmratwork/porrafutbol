@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Marcador } from "@/components/Marcador";
 import { CuentaAtras } from "@/components/CuentaAtras";
 import { Toast, type ToastData } from "@/components/Toast";
@@ -28,12 +29,34 @@ function leerCodigos(): Record<string, string> {
 }
 
 export default function HomePage() {
+  // useSearchParams exige un límite de Suspense en el App Router.
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto flex min-h-screen max-w-2xl items-center justify-center p-6">
+          <p className="animate-pulse text-cesped-300">Cargando porra…</p>
+        </main>
+      }
+    >
+      <PorraApp />
+    </Suspense>
+  );
+}
+
+function PorraApp() {
+  // Invitación firmada por el organizador: sólo con ella se puede apostar, y
+  // exactamente con el nombre que autoriza. Llegan por la URL (?nombre=&inv=).
+  const searchParams = useSearchParams();
+  const inv = searchParams.get("inv") ?? "";
+  const invitado = inv.length > 0;
+  const nombreInvitacion = searchParams.get("nombre") ?? "";
+
   const [estado, setEstado] = useState<EstadoActualDTO | null>(null);
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
-  // Formulario de nueva apuesta
-  const [nombre, setNombre] = useState("");
+  // Formulario de nueva apuesta (el nombre lo fija la invitación).
+  const [nombre, setNombre] = useState(nombreInvitacion);
   const [golesLocal, setGolesLocal] = useState("");
   const [golesVisitante, setGolesVisitante] = useState("");
   const [enviando, setEnviando] = useState(false);
@@ -112,6 +135,7 @@ export default function HomePage() {
           nombre,
           golesLocal: golesLocal === "" ? null : Number(golesLocal),
           golesVisitante: golesVisitante === "" ? null : Number(golesVisitante),
+          inv,
         }),
       });
       const data = await res.json();
@@ -122,7 +146,8 @@ export default function HomePage() {
         setEstado(creada.estado);
         guardarCodigoLocal(creada.apuestaId, creada.codigo);
         setCodigoNuevo({ id: creada.apuestaId, codigo: creada.codigo });
-        setNombre("");
+        // El nombre lo fija la invitación; se mantiene tras apostar.
+        setNombre(invitado ? nombreInvitacion : "");
         setGolesLocal("");
         setGolesVisitante("");
       }
@@ -208,7 +233,10 @@ export default function HomePage() {
 
   const copiarEnlace = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      // Copia la URL pública de la porra, SIN los parámetros de la invitación
+      // personal (nombre/inv), para no compartir por error tu enlace de apuesta.
+      const url = window.location.origin + window.location.pathname;
+      await navigator.clipboard.writeText(url);
       setToast({ tipo: "exito", mensaje: "Enlace copiado al portapapeles." });
     } catch {
       setToast({ tipo: "error", mensaje: "No se pudo copiar el enlace." });
@@ -261,7 +289,9 @@ export default function HomePage() {
   // Abierta en la BD pero el partido ya ha comenzado: cerrada automáticamente.
   const cerradaPorHora = porra.estado === "ABIERTA" && !admite && !finalizada;
   const estadoVisible = cerradaPorHora ? "CERRADA" : porra.estado;
-  const puedeApostar = admite && !completa;
+  // Sólo se puede apostar con una invitación válida en la URL.
+  const puedeApostar = admite && !completa && invitado;
+  const faltaInvitacion = admite && !completa && !invitado;
   const pctOcupacion = Math.min(100, Math.round((estado!.numApuestas / MAX_APOSTANTES) * 100));
 
   return (
@@ -378,6 +408,12 @@ export default function HomePage() {
               Porra completa ({MAX_APOSTANTES}/{MAX_APOSTANTES}). No se admiten más apuestas.
             </p>
           )}
+          {faltaInvitacion && (
+            <p className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-200">
+              Para apostar necesitas el <strong>enlace personal</strong> que reparte el
+              organizador. Sin ese enlace no se puede crear una apuesta.
+            </p>
+          )}
 
           {puedeApostar && (
             <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
@@ -389,14 +425,13 @@ export default function HomePage() {
                   id="nombre"
                   type="text"
                   required
+                  readOnly
                   maxLength={40}
                   value={nombre}
-                  onChange={(e) => setNombre(e.target.value)}
-                  placeholder="Ej. Pau"
-                  className="input"
+                  className="input cursor-not-allowed opacity-90"
                 />
                 <p className="mt-1 text-xs text-slate-500">
-                  Cada nombre debe ser único en esta porra.
+                  Apuestas con el nombre de tu invitación. No se puede cambiar.
                 </p>
               </div>
 

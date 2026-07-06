@@ -135,6 +135,8 @@ export default function AdminPage() {
           trabajando={trabajando}
           peticion={peticion}
           eliminarApuesta={eliminarApuesta}
+          pin={pin}
+          onToast={setToast}
         />
       ) : (
         <CrearPorra trabajando={trabajando} peticion={peticion} />
@@ -248,11 +250,15 @@ function GestionPorra({
   trabajando,
   peticion,
   eliminarApuesta,
+  pin,
+  onToast,
 }: {
   estado: EstadoActualDTO;
   trabajando: boolean;
   peticion: PeticionFn;
   eliminarApuesta: (id: string) => void;
+  pin: string;
+  onToast: (t: ToastData) => void;
 }) {
   const porra = estado.porra!;
   // Abierta en la BD pero el partido ya empezó: cerrada automáticamente por hora.
@@ -260,6 +266,18 @@ function GestionPorra({
   const [resLocal, setResLocal] = useState("");
   const [resVisitante, setResVisitante] = useState("");
   const [confirmarReinicio, setConfirmarReinicio] = useState(false);
+
+  const cerrar = async () => {
+    if (
+      !window.confirm(
+        "¿Cerrar las apuestas? Es IRREVERSIBLE: la porra no se podrá reabrir e invalida " +
+          "todas las invitaciones emitidas. Para empezar de nuevo habría que reiniciarla.",
+      )
+    ) {
+      return;
+    }
+    await peticion("PATCH", { accion: "CERRAR" }, "Apuestas cerradas.");
+  };
 
   const finalizar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -307,26 +325,24 @@ function GestionPorra({
         </dl>
       </section>
 
-      {/* Abrir / Cerrar */}
-      {porra.estado !== "FINALIZADA" && (
+      {/* Invitaciones */}
+      {porra.estado === "ABIERTA" && <SeccionInvitaciones pin={pin} onToast={onToast} />}
+
+      {/* Cerrar apuestas (irreversible) */}
+      {porra.estado === "ABIERTA" && (
         <section className="card p-5">
-          <h3 className="mb-3 font-bold text-white">Apuestas</h3>
-          <div className="flex gap-3">
-            <button
-              disabled={trabajando || porra.estado === "ABIERTA"}
-              onClick={() => peticion("PATCH", { accion: "ABRIR" }, "Apuestas abiertas.")}
-              className="btn-primary flex-1 py-2"
-            >
-              Abrir
-            </button>
-            <button
-              disabled={trabajando || porra.estado === "CERRADA"}
-              onClick={() => peticion("PATCH", { accion: "CERRAR" }, "Apuestas cerradas.")}
-              className="btn-amber flex-1 py-2"
-            >
-              Cerrar
-            </button>
-          </div>
+          <h3 className="mb-3 font-bold text-white">Cerrar apuestas</h3>
+          <p className="mb-3 text-xs text-slate-400">
+            Cierra la porra antes de la hora del partido. Es <strong>irreversible</strong> y deja
+            sin efecto todas las invitaciones emitidas.
+          </p>
+          <button
+            disabled={trabajando}
+            onClick={cerrar}
+            className="btn-amber w-full py-2"
+          >
+            Cerrar apuestas
+          </button>
         </section>
       )}
 
@@ -464,5 +480,108 @@ function GestionPorra({
         )}
       </section>
     </div>
+  );
+}
+
+/**
+ * Genera enlaces de invitación (uno por nombre). Cada enlace autoriza a apostar
+ * exactamente con ese nombre en la porra activa. La firma se calcula en el
+ * servidor; aquí sólo se muestran y se copian los enlaces resultantes.
+ */
+function SeccionInvitaciones({
+  pin,
+  onToast,
+}: {
+  pin: string;
+  onToast: (t: ToastData) => void;
+}) {
+  const [nombres, setNombres] = useState("");
+  const [generando, setGenerando] = useState(false);
+  const [enlaces, setEnlaces] = useState<{ nombre: string; url: string }[]>([]);
+
+  const generar = async () => {
+    if (!pin) {
+      onToast({ tipo: "error", mensaje: "Introduce el PIN de administración." });
+      return;
+    }
+    const lista = nombres
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (lista.length === 0) {
+      onToast({ tipo: "error", mensaje: "Escribe al menos un nombre." });
+      return;
+    }
+    setGenerando(true);
+    try {
+      const res = await fetch("/api/invitaciones", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-pin": pin },
+        body: JSON.stringify({ nombres: lista }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        onToast({
+          tipo: "error",
+          mensaje: data.error ?? "No se pudieron generar las invitaciones.",
+        });
+        return;
+      }
+      const generadas: { nombre: string; url: string }[] = data.invitaciones ?? [];
+      setEnlaces(generadas);
+      onToast({ tipo: "exito", mensaje: `${generadas.length} invitación(es) generada(s).` });
+    } catch {
+      onToast({ tipo: "error", mensaje: "Error de red. Inténtalo de nuevo." });
+    } finally {
+      setGenerando(false);
+    }
+  };
+
+  const copiar = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(window.location.origin + url);
+      onToast({ tipo: "exito", mensaje: "Enlace copiado al portapapeles." });
+    } catch {
+      onToast({ tipo: "error", mensaje: "No se pudo copiar el enlace." });
+    }
+  };
+
+  return (
+    <section className="card p-5">
+      <h3 className="mb-1 font-bold text-white">Invitaciones</h3>
+      <p className="mb-3 text-xs text-slate-400">
+        Un nombre por línea. Cada persona recibe un enlace personal: sólo con él podrá apostar,
+        y exactamente con ese nombre.
+      </p>
+      <textarea
+        value={nombres}
+        onChange={(e) => setNombres(e.target.value)}
+        rows={4}
+        placeholder={"Ana\nLuis\nNuria"}
+        className="input font-mono"
+      />
+      <button disabled={generando} onClick={generar} className="btn-primary mt-3 w-full">
+        {generando ? "Generando…" : "Generar invitaciones"}
+      </button>
+
+      {enlaces.length > 0 && (
+        <ul className="mt-4 flex flex-col gap-1.5">
+          {enlaces.map((e) => (
+            <li
+              key={e.nombre}
+              className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.02] px-3 py-2.5"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block font-medium text-slate-200">{e.nombre}</span>
+                <span className="block truncate font-mono text-xs text-slate-500">{e.url}</span>
+              </span>
+              <button onClick={() => copiar(e.url)} className="btn-ghost px-3 py-1.5 text-xs">
+                Copiar
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
