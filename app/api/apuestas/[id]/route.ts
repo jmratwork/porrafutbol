@@ -20,7 +20,8 @@ function extraerCodigo(req: Request, body?: Record<string, unknown>): string | n
  * PATCH /api/apuestas/[id] → editar el marcador de una apuesta propia.
  * Requiere el código secreto de la apuesta. Sólo mientras la porra esté ABIERTA.
  */
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -37,7 +38,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
 
   const apuesta = await prisma.apuesta.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: { porra: true },
   });
   if (!apuesta) {
@@ -87,7 +88,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
  * válido (rescate). El dueño sólo puede borrar mientras la porra esté ABIERTA;
  * el admin también con la porra CERRADA, pero nunca una vez FINALIZADA.
  */
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   let body: Record<string, unknown> = {};
   try {
     const text = await req.text();
@@ -105,7 +107,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   }
 
   const apuesta = await prisma.apuesta.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: { porra: true },
   });
   if (!apuesta) {
