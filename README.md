@@ -4,7 +4,7 @@ Aplicación Web para organizar una **porra** alrededor de un único partido de f
 (local vs visitante). Hasta **20 apostantes** pronostican el marcador exacto; el bote se
 reparte entre quien acierta (o, si nadie acierta, entre los más cercanos).
 
-Construida con **Next.js 14 (App Router) + TypeScript + Tailwind CSS** y persistencia con
+Construida con **Next.js 15 (App Router) + TypeScript + Tailwind CSS** y persistencia con
 **Prisma + PostgreSQL**. Lista para desplegar en **Vercel** sin pasos manuales de código.
 
 ---
@@ -14,8 +14,8 @@ Construida con **Next.js 14 (App Router) + TypeScript + Tailwind CSS** y persist
 - Una porra activa a la vez con estados **ABIERTA → CERRADA → FINALIZADA**.
 - Página pública `/`: cabecera tipo marcador, cuenta atrás, bote en vivo, formulario de
   apuesta, lista de apuestas y banner de ganadores.
-- Panel `/admin` protegido por PIN: crear porra, abrir/cerrar apuestas, introducir el
-  resultado real y reiniciar.
+- Panel `/admin` protegido por PIN: crear porra, generar invitaciones, cerrar apuestas
+  (irreversible), introducir el resultado real y reiniciar.
 - Límite estricto de 20 apuestas (con control de concurrencia en base de datos).
 - Cálculo de ganadores por acierto exacto o, en su defecto, por proximidad (distancia
   Manhattan), con reparto del bote a partes iguales en caso de empate.
@@ -102,7 +102,8 @@ Cualquiera de estas opciones funciona; copia su cadena de conexión en `DATABASE
 1. Sube el repositorio a GitHub/GitLab e impórtalo en [vercel.com](https://vercel.com).
 2. En **Settings → Environment Variables** añade:
    - `DATABASE_URL` (si usas Vercel Postgres se añade sola al crear la base de datos).
-   - `ADMIN_PIN` (mínimo 12 caracteres) y `APUESTA_SECRET` (cadena larga y aleatoria).
+   - `ADMIN_PIN` (mínimo 12 caracteres), `APUESTA_SECRET` e `INVITE_SECRET` (cadenas largas
+     y aleatorias, distintas entre sí). Los dos secretos son **obligatorios en producción**.
 3. **Deploy.** No hace falta configurar nada más: Vercel detecta el script
    `vercel-build` del `package.json`, que ejecuta automáticamente
    `prisma generate && prisma migrate deploy && next build`. Es decir, **las tablas se
@@ -128,7 +129,7 @@ Cualquiera de estas opciones funciona; copia su cadena de conexión en `DATABASE
 | POST   | `/api/porra`    | Crear la porra (equipos, fecha/hora, precio).          | Sí  |
 | PATCH  | `/api/porra`    | `accion`: `CERRAR` \| `FINALIZAR` (`ABRIR` ya no reabre; **409**). | Sí  |
 | DELETE | `/api/porra`    | Reiniciar (borra porra y apuestas).                    | Sí  |
-| POST   | `/api/invitaciones` | Generar enlaces de invitación (`{ nombres: string[] }`). | Sí  |
+| POST   | `/api/invitaciones` | Generar enlaces de invitación (`{ nombres: string[] }`); **409** si la porra está cerrada, empezada o llena. | Sí  |
 | POST   | `/api/apuestas` | Crear una apuesta (requiere **invitación** + marcador). Devuelve un código secreto. | Invitación |
 | PATCH  | `/api/apuestas/:id` | Editar el marcador de una apuesta (requiere su código). | Código |
 | DELETE | `/api/apuestas/:id` | Borrar una apuesta (código de su dueño **o** PIN de admin). | Código/PIN |
@@ -200,22 +201,29 @@ La lógica está en [`lib/porra.ts`](lib/porra.ts).
 ```
 app/
   api/
-    porra/route.ts      # GET/POST/PATCH/DELETE de la porra
-    apuestas/route.ts   # POST de apuestas
-  page.tsx              # Home pública
-  admin/page.tsx        # Panel de administración
+    porra/route.ts          # GET/POST/PATCH/DELETE de la porra
+    apuestas/route.ts       # POST de apuestas (requiere invitación)
+    apuestas/[id]/route.ts  # PATCH/DELETE de una apuesta (código o PIN)
+    invitaciones/route.ts   # POST: genera enlaces de invitación (admin)
+  page.tsx                  # Home pública
+  admin/page.tsx            # Panel de administración
   layout.tsx, globals.css
-components/              # Marcador, Escudo, CuentaAtras, Toast
+middleware.ts               # CSP basada en nonce por petición
+components/                 # Marcador, Escudo, CuentaAtras, Toast
 lib/
-  prisma.ts             # Cliente Prisma
-  porra.ts              # Cálculo de bote y ganadores
-  estado.ts             # Construcción del estado actual (DTO)
-  validation.ts         # Validaciones de entrada
-  auth.ts               # Validación del PIN
+  prisma.ts                 # Cliente Prisma
+  porra.ts                  # Cálculo de bote y ganadores
+  estado.ts                 # Construcción del estado actual (DTO)
+  validation.ts             # Validaciones de entrada
+  auth.ts                   # Validación del PIN de admin
+  invitacion.ts             # Firma/verificación de invitaciones (HMAC)
+  codigo.ts                 # Código secreto por apuesta (HMAC)
+  rateLimit.ts              # Freno anti-fuerza-bruta (KV o memoria)
+  fecha.ts                  # Interpretación de la hora en Barcelona
   format.ts, types.ts
 prisma/
   schema.prisma
-  migrations/           # Migración inicial lista para `migrate deploy`
+  migrations/               # Migraciones listas para `migrate deploy`
 ```
 
 ---
