@@ -325,8 +325,11 @@ function GestionPorra({
         </dl>
       </section>
 
-      {/* Invitaciones */}
-      {porra.estado === "ABIERTA" && <SeccionInvitaciones pin={pin} onToast={onToast} />}
+      {/* Invitaciones: sólo si la porra admite apuestas y no está llena (coincide
+          con la guarda del servidor en POST /api/invitaciones). */}
+      {estado.admiteApuestas && !estado.completa && (
+        <SeccionInvitaciones pin={pin} onToast={onToast} />
+      )}
 
       {/* Cerrar apuestas (irreversible) */}
       {porra.estado === "ABIERTA" && (

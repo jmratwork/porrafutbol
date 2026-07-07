@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { obtenerPorraActiva } from "@/lib/estado";
+import { admiteApuestas, obtenerPorraActiva } from "@/lib/estado";
 import { normalizarNombre, validarNombre } from "@/lib/validation";
 import { extraerPin, pinValido } from "@/lib/auth";
 import { ipDe, limpiarFallos, rateLimitOk, registrarFallo } from "@/lib/rateLimit";
 import { firmarInvitacion } from "@/lib/invitacion";
+import { MAX_APOSTANTES } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,23 @@ export async function POST(req: Request) {
   const porra = await obtenerPorraActiva();
   if (!porra) {
     return NextResponse.json({ error: "No hay ninguna porra activa." }, { status: 404 });
+  }
+
+  // No tiene sentido emitir invitaciones si la porra no puede recibir apuestas:
+  // cerrada, finalizada o con el partido ya empezado (admiteApuestas), o llena
+  // (aforo, que admiteApuestas no comprueba porque una porra con 20 apuestas
+  // sigue en estado ABIERTA).
+  if (!admiteApuestas(porra)) {
+    return NextResponse.json(
+      { error: "La porra no admite apuestas ahora mismo; no se generan invitaciones." },
+      { status: 409 },
+    );
+  }
+  if (porra.apuestas.length >= MAX_APOSTANTES) {
+    return NextResponse.json(
+      { error: "Porra completa: no quedan plazas para nuevas invitaciones." },
+      { status: 409 },
+    );
   }
 
   const nombresRaw = Array.isArray(body.nombres) ? body.nombres : [];
