@@ -40,5 +40,8 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   // Aplica a las páginas HTML; excluye API (JSON, sin scripts) y estáticos.
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  // Se usan límites de segmento (api/, _next/static/) y ancla exacta en el
+  // favicon para no excluir por error rutas que solo empiecen igual (p. ej.
+  // /apikeys quedaría protegida por la CSP).
+  matcher: ["/((?!api/|_next/static/|_next/image|favicon\\.ico$).*)"],
 };
