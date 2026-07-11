@@ -7,6 +7,11 @@ reparte entre quien acierta (o, si nadie acierta, entre los más cercanos).
 Construida con **Next.js 15 (App Router) + TypeScript + Tailwind CSS** y persistencia con
 **Prisma + PostgreSQL**. Lista para desplegar en **Vercel** sin pasos manuales de código.
 
+<p align="center">
+  <img src="demo.gif" width="320"
+       alt="Demo: el organizador crea el partido, reparte invitaciones y cada persona apuesta con su enlace" />
+</p>
+
 ---
 
 ## Funcionalidades
