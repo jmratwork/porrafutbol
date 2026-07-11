@@ -8,7 +8,7 @@ Construida con **Next.js 15 (App Router) + TypeScript + Tailwind CSS** y persist
 **Prisma + PostgreSQL**. Lista para desplegar en **Vercel** sin pasos manuales de código.
 
 <p align="center">
-  <img src="demo.gif" width="320"
+  <img src="demo.gif" width="440"
        alt="Demo: el organizador crea el partido, reparte invitaciones y cada persona apuesta con su enlace" />
 </p>
 
