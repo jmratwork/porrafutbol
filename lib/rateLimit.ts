@@ -17,9 +17,18 @@ const MAX_FALLOS = 10;
 // --- IP del cliente -------------------------------------------------------
 
 export function ipDe(req: Request): string {
+  // x-real-ip lo fija el edge (en Vercel) y el cliente NO puede falsificarlo.
+  const real = req.headers.get("x-real-ip");
+  if (real) return real.trim();
+  // El PRIMER salto de x-forwarded-for es controlable por el cliente (podría
+  // rotarlo para evadir el rate-limiting); usamos el ÚLTIMO, que lo añade el
+  // proxy de confianza más cercano.
   const xff = req.headers.get("x-forwarded-for");
-  if (xff) return xff.split(",")[0]!.trim();
-  return req.headers.get("x-real-ip") ?? "desconocida";
+  if (xff) {
+    const partes = xff.split(",").map((p) => p.trim()).filter(Boolean);
+    if (partes.length > 0) return partes[partes.length - 1]!;
+  }
+  return "desconocida";
 }
 
 // --- Almacén KV opcional (Upstash Redis REST / Vercel KV) -----------------
