@@ -68,6 +68,18 @@ INVITE_SECRET="cambia-esto-por-otra-cadena-larga-y-aleatoria"
 - **`INVITE_SECRET`**: secreto para firmar las invitaciones (distinto de `APUESTA_SECRET`).
   **Obligatorio en producción**, con el mismo comportamiento de fallo si falta.
 
+**Cómo generar los secretos.** `APUESTA_SECRET` e `INVITE_SECRET` deben ser cadenas largas y
+aleatorias, **distintas entre sí** (y el `ADMIN_PIN`, de al menos 12 caracteres). Genera un
+valor nuevo para **cada uno** con cualquiera de estos comandos:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"   # con Node
+openssl rand -hex 32                                                       # o con OpenSSL
+```
+
+Pega cada resultado en su variable, tanto en el `.env` local como en las variables de entorno
+de Vercel.
+
 ### 3. Crear las tablas (migraciones de Prisma)
 
 ```bash
