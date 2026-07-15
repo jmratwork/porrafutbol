@@ -74,19 +74,24 @@ INVITE_SECRET="cambia-esto-por-otra-cadena-larga-y-aleatoria"
 - **`INVITE_SECRET`**: secreto para firmar las invitaciones (distinto de `APUESTA_SECRET`).
   **Obligatorio en producción**, con el mismo comportamiento de fallo si falta.
 
-**Cómo generar los secretos.** `SESSION_SECRET`, `APUESTA_SECRET` e `INVITE_SECRET` deben ser
-cadenas largas y aleatorias, **distintas entre sí** (y el `ADMIN_PIN`, de al menos 12
-caracteres). Genera un valor nuevo para **cada uno** con cualquiera de estos comandos:
+**Cómo generar los secretos.**
 
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"   # con Node
-openssl rand -hex 32                                                       # o con OpenSSL
-```
+- **`ADMIN_PIN`**: lo eliges tú (lo tecleas al entrar en `/admin`). Una contraseña fuerte de
+  **al menos 12 caracteres**; en producción, si es más corto, el admin queda bloqueado.
+- **`SESSION_SECRET`, `APUESTA_SECRET` e `INVITE_SECRET`**: cadenas largas, aleatorias y
+  **distintas entre sí**. Genera un valor nuevo para **cada una** con cualquiera de estos
+  comandos:
 
-Para el `TOTP_SECRET` usa `npm run totp:setup`: genera el secreto, muestra un **QR** para
-escanearlo con tu app de autenticación (Google Authenticator, Authy, 1Password…) y te da el
-valor a pegar en la variable. Pega cada secreto tanto en el `.env` local como en las variables
-de entorno de Vercel.
+  ```bash
+  node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"   # con Node
+  openssl rand -hex 32                                                       # o con OpenSSL
+  ```
+
+- **`TOTP_SECRET`**: ejecuta `npm run totp:setup`. Genera el secreto, muestra un **QR** para
+  escanearlo con tu app de autenticación (Google Authenticator, Authy, 1Password…) y te da el
+  valor a pegar en la variable.
+
+Pega cada valor tanto en el `.env` local como en las variables de entorno de Vercel.
 
 ### Doble factor (2FA) del panel de administración
 
