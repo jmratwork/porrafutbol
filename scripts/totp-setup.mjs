@@ -17,7 +17,7 @@ import qrcode from "qrcode";
 const { authenticator } = otplib;
 
 const CUENTA = process.env.TOTP_CUENTA ?? "admin";
-const EMISOR = process.env.TOTP_EMISOR ?? "Porra de futbol";
+const EMISOR = process.env.TOTP_EMISOR ?? "porrafutbol";
 
 async function main() {
   const secret = authenticator.generateSecret(); // base32
