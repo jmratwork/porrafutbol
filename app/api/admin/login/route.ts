@@ -67,10 +67,11 @@ export async function POST(req: NextRequest) {
     });
     return res;
   } catch (e) {
-    if (e instanceof AdminAuthError) {
-      return NextResponse.json({ error: e.message }, { status: e.status });
-    }
+    // Un AdminAuthError indica una (mala) configuración del servidor. No revelamos
+    // el detalle a un cliente sin autenticar (confirmaría el fallo a un sondeo
+    // anónimo): lo registramos en el servidor y devolvemos un mensaje genérico.
     console.error("POST /api/admin/login", e);
-    return NextResponse.json({ error: "Error interno del servidor." }, { status: 500 });
+    const status = e instanceof AdminAuthError ? e.status : 500;
+    return NextResponse.json({ error: "Error interno del servidor." }, { status });
   }
 }
