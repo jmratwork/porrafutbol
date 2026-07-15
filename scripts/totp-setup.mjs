@@ -11,17 +11,15 @@
  * El secreto NO se guarda en ningún fichero: cópialo tú a tu gestor de secretos
  * / .env. Ejecútalo una sola vez (o cuando quieras rotar el secreto).
  */
-import otplib from "otplib";
+import { generateSecret, generateURI, generateSync } from "otplib";
 import qrcode from "qrcode";
-
-const { authenticator } = otplib;
 
 const CUENTA = process.env.TOTP_CUENTA ?? "admin";
 const EMISOR = process.env.TOTP_EMISOR ?? "porrafutbol";
 
 async function main() {
-  const secret = authenticator.generateSecret(); // base32
-  const otpauth = authenticator.keyuri(CUENTA, EMISOR, secret);
+  const secret = generateSecret(); // base32, 160 bits (128 bits mínimo)
+  const otpauth = generateURI({ issuer: EMISOR, label: CUENTA, secret });
 
   console.log("\n🔐 Enrolamiento del doble factor (TOTP)\n");
   console.log("1) Escanea este QR con tu app de autenticación:\n");
@@ -35,7 +33,7 @@ async function main() {
   console.log("   · En producción (Vercel): Project Settings → Environment Variables\n");
 
   console.log("3) Comprobación: el código de 6 dígitos de tu app debería ser ahora:\n");
-  console.log(`   ${authenticator.generate(secret)}   (cambia cada 30 s)\n`);
+  console.log(`   ${generateSync({ secret })}   (cambia cada 30 s)\n`);
 }
 
 main().catch((e) => {

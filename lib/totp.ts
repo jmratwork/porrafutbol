@@ -1,4 +1,4 @@
-import { authenticator } from "otplib";
+import { verifySync } from "otplib";
 import { AdminAuthError } from "./auth";
 
 /**
@@ -13,12 +13,14 @@ import { AdminAuthError } from "./auth";
  * - En desarrollo, si no está configurado, se OMITE el segundo factor (con un
  *   aviso) para no bloquear el arranque local; el PIN sigue siendo obligatorio.
  *
- * La comprobación es sólo criptográfica (pura); el anti-replay (que un código
- * no se use dos veces) vive en `lib/rateLimit.ts` para funcionar entre instancias.
+ * La verificación (constante en tiempo) es sólo criptográfica; el anti-replay
+ * (que un código no se use dos veces) vive en `lib/rateLimit.ts` para funcionar
+ * entre instancias, usando el `timeStep` que devuelve la propia verificación.
  */
 
-// Ventana de ±1 paso (30 s) para tolerar el desfase de reloj del móvil.
-authenticator.options = { window: 1, step: 30 };
+const PERIODO_S = 30;
+// Tolerancia de ±1 paso (±30 s) para el desfase de reloj del móvil.
+const TOLERANCIA_S = 30;
 
 export function totpConfigurado(): boolean {
   return !!process.env.TOTP_SECRET;
@@ -32,13 +34,14 @@ export function totpRequerido(): boolean {
 export interface ResultadoTotp {
   /** El código es válido criptográficamente (o el 2FA está desactivado en dev). */
   valido: boolean;
-  /** Paso de tiempo TOTP del código (para el anti-replay), o null si no aplica. */
+  /** Paso de tiempo TOTP (`timeStep`) del código, para el anti-replay, o null. */
   paso: number | null;
 }
 
 /**
  * Comprueba un código TOTP de 6 dígitos contra TOTP_SECRET (sin anti-replay).
- * Lanza AdminAuthError(500) si falta el secreto en producción.
+ * Lanza AdminAuthError(500) si falta el secreto —o si no cumple el mínimo de
+ * 128 bits que exige otplib— en producción.
  */
 export function comprobarTotp(code: string): ResultadoTotp {
   const secreto = process.env.TOTP_SECRET;
@@ -56,10 +59,29 @@ export function comprobarTotp(code: string): ResultadoTotp {
   const limpio = (code ?? "").replace(/\s+/g, "");
   if (!/^\d{6}$/.test(limpio)) return { valido: false, paso: null };
 
-  // checkDelta devuelve el desfase (-1, 0, 1) respecto al paso actual, o null.
-  const delta = authenticator.checkDelta(limpio, secreto);
-  if (delta === null || delta === undefined) return { valido: false, paso: null };
+  let resultado;
+  try {
+    resultado = verifySync({
+      secret: secreto,
+      token: limpio,
+      period: PERIODO_S,
+      epochTolerance: TOLERANCIA_S,
+    });
+  } catch (e) {
+    // Un TOTP_SECRET que no cumple el mínimo de 128 bits (p. ej. uno generado
+    // con la versión anterior) hace que otplib lance aquí: hay que regenerarlo.
+    if (e instanceof Error && e.name.startsWith("Secret")) {
+      throw new AdminAuthError(
+        500,
+        "TOTP_SECRET no es válido. Regenera el segundo factor con: npm run totp:setup.",
+      );
+    }
+    throw e;
+  }
 
-  const paso = Math.floor(Date.now() / 1000 / 30) + delta;
+  if (!resultado.valid) return { valido: false, paso: null };
+  // `verifySync` devuelve el tipo unión TOTP|HOTP; el `timeStep` (paso de tiempo,
+  // para el anti-replay) sólo está en la variante TOTP, que es la que usamos.
+  const paso = "timeStep" in resultado ? resultado.timeStep : null;
   return { valido: true, paso };
 }
