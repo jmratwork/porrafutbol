@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Toast, type ToastData } from "@/components/Toast";
 import { formatearEuros, formatearFecha } from "@/lib/format";
 import { MAX_APOSTANTES, MAX_GOLES, type EstadoActualDTO } from "@/lib/types";
@@ -196,8 +196,10 @@ function LoginAdmin({
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(avisoInicial);
 
-  const enviar = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Último código auto-enviado: evita reintentar el mismo en bucle tras un error.
+  const codigoAutoenviado = useRef("");
+
+  const procesarLogin = async () => {
     setError(null);
     setEnviando(true);
     try {
@@ -222,6 +224,27 @@ function LoginAdmin({
       setEnviando(false);
     }
   };
+
+  const enviar = (e: React.FormEvent) => {
+    e.preventDefault();
+    void procesarLogin();
+  };
+
+  // Al completar los 6 dígitos, comprueba el código automáticamente (sin tener que
+  // pulsar "Verificar").
+  useEffect(() => {
+    if (
+      fase === "codigo" &&
+      code.length === 6 &&
+      !enviando &&
+      codigoAutoenviado.current !== code
+    ) {
+      codigoAutoenviado.current = code;
+      void procesarLogin();
+    }
+    // procesarLogin usa el estado actual del render; no hace falta en deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fase, code, enviando]);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-10">
@@ -301,6 +324,7 @@ function LoginAdmin({
                 setFase("pin");
                 setCode("");
                 setError(null);
+                codigoAutoenviado.current = "";
               }}
               className="text-center text-xs text-slate-400 underline transition hover:text-slate-200"
             >
