@@ -12,7 +12,9 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  */
 
 export const COOKIE_SESION = "porra_admin";
-export const TTL_SESION_MS = 8 * 60 * 60 * 1000; // 8 horas
+// Ventana corta: el token es stateless (no revocable en servidor), así que
+// limitamos su validez para reducir la exposición si alguna vez se filtra.
+export const TTL_SESION_MS = 60 * 60 * 1000; // 60 minutos
 
 function secreto(): string {
   const s = process.env.SESSION_SECRET;

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { obtenerEstadoActual, obtenerPorraActiva } from "@/lib/estado";
 import { validarGoles, validarPorra } from "@/lib/validation";
@@ -6,6 +7,14 @@ import { tieneSesionAdmin } from "@/lib/auth";
 
 // Esta API depende de la base de datos: nunca debe cachearse.
 export const dynamic = "force-dynamic";
+
+/** Se lanza dentro de la transacción de creación si ya hay una porra. */
+class PorraYaExisteError extends Error {}
+
+/** ¿El error es un conflicto de concurrencia (transacción serializable abortada)? */
+function esConflictoConcurrencia(e: unknown): boolean {
+  return e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034";
+}
 
 /**
  * GET /api/porra → estado actual (porra + apuestas + bote + ganadores).
@@ -42,6 +51,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Pre-chequeo rápido (caso normal): si ya hay porra, 409 sin abrir transacción.
   const existente = await obtenerPorraActiva();
   if (existente) {
     return NextResponse.json(
@@ -56,18 +66,33 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    await prisma.porra.create({
-      data: {
-        equipoLocal: validacion.data.equipoLocal,
-        equipoVisitante: validacion.data.equipoVisitante,
-        fechaPartido: validacion.data.fechaPartido,
-        precio: validacion.data.precio,
-        estado: "ABIERTA",
+    // Re-chequeo dentro de una transacción SERIALIZABLE: si dos POST llegan a la
+    // vez, ambos verían la tabla vacía en el pre-chequeo, pero Postgres aborta
+    // una de las transacciones concurrentes (P2034) y así nunca se crean dos.
+    await prisma.$transaction(
+      async (tx) => {
+        if ((await tx.porra.count()) > 0) throw new PorraYaExisteError();
+        await tx.porra.create({
+          data: {
+            equipoLocal: validacion.data!.equipoLocal,
+            equipoVisitante: validacion.data!.equipoVisitante,
+            fechaPartido: validacion.data!.fechaPartido,
+            precio: validacion.data!.precio,
+            estado: "ABIERTA",
+          },
+        });
       },
-    });
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
     const estado = await obtenerEstadoActual();
     return NextResponse.json(estado, { status: 201 });
   } catch (e) {
+    if (e instanceof PorraYaExisteError || esConflictoConcurrencia(e)) {
+      return NextResponse.json(
+        { error: "Ya existe una porra. Reiníciala para crear una nueva." },
+        { status: 409 },
+      );
+    }
     console.error("POST /api/porra", e);
     return NextResponse.json({ error: "No se pudo crear la porra." }, { status: 500 });
   }
