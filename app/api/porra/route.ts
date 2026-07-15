@@ -1,9 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { obtenerEstadoActual, obtenerPorraActiva } from "@/lib/estado";
 import { validarGoles, validarPorra } from "@/lib/validation";
-import { extraerPin, pinValido } from "@/lib/auth";
-import { ipDe, limpiarFallos, rateLimitOk, registrarFallo } from "@/lib/rateLimit";
+import { tieneSesionAdmin } from "@/lib/auth";
 
 // Esta API depende de la base de datos: nunca debe cachearse.
 export const dynamic = "force-dynamic";
@@ -28,7 +27,7 @@ export async function GET() {
  * POST /api/porra → crear porra (requiere PIN).
  * Sólo se permite si no existe ya una porra activa.
  */
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -36,18 +35,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Cuerpo de la petición no válido." }, { status: 400 });
   }
 
-  const ip = ipDe(req);
-  if (!(await rateLimitOk(ip))) {
+  if (!tieneSesionAdmin(req)) {
     return NextResponse.json(
-      { error: "Demasiados intentos. Espera unos minutos." },
-      { status: 429 },
+      { error: "Sesión de administración no válida o caducada." },
+      { status: 401 },
     );
   }
-  if (!pinValido(extraerPin(req))) {
-    await registrarFallo(ip);
-    return NextResponse.json({ error: "PIN incorrecto." }, { status: 401 });
-  }
-  await limpiarFallos(ip);
 
   const existente = await obtenerPorraActiva();
   if (existente) {
@@ -85,7 +78,7 @@ export async function POST(req: Request) {
  * body.accion: "ABRIR" | "CERRAR" | "FINALIZAR"
  *  - FINALIZAR requiere resultadoLocal y resultadoVisitante.
  */
-export async function PATCH(req: Request) {
+export async function PATCH(req: NextRequest) {
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -93,18 +86,12 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Cuerpo de la petición no válido." }, { status: 400 });
   }
 
-  const ip = ipDe(req);
-  if (!(await rateLimitOk(ip))) {
+  if (!tieneSesionAdmin(req)) {
     return NextResponse.json(
-      { error: "Demasiados intentos. Espera unos minutos." },
-      { status: 429 },
+      { error: "Sesión de administración no válida o caducada." },
+      { status: 401 },
     );
   }
-  if (!pinValido(extraerPin(req))) {
-    await registrarFallo(ip);
-    return NextResponse.json({ error: "PIN incorrecto." }, { status: 401 });
-  }
-  await limpiarFallos(ip);
 
   const porra = await obtenerPorraActiva();
   if (!porra) {
@@ -178,7 +165,7 @@ export async function PATCH(req: Request) {
  * Si el cuerpo trae datos válidos de una nueva porra, la crea acto seguido.
  * Requiere PIN.
  */
-export async function DELETE(req: Request) {
+export async function DELETE(req: NextRequest) {
   let body: Record<string, unknown> = {};
   try {
     // El cuerpo es opcional en DELETE.
@@ -188,18 +175,12 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "Cuerpo de la petición no válido." }, { status: 400 });
   }
 
-  const ip = ipDe(req);
-  if (!(await rateLimitOk(ip))) {
+  if (!tieneSesionAdmin(req)) {
     return NextResponse.json(
-      { error: "Demasiados intentos. Espera unos minutos." },
-      { status: 429 },
+      { error: "Sesión de administración no válida o caducada." },
+      { status: 401 },
     );
   }
-  if (!pinValido(extraerPin(req))) {
-    await registrarFallo(ip);
-    return NextResponse.json({ error: "PIN incorrecto." }, { status: 401 });
-  }
-  await limpiarFallos(ip);
 
   try {
     // Borra todas las porras (y sus apuestas en cascada).

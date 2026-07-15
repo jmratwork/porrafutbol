@@ -1,45 +1,55 @@
 import { timingSafeEqual } from "node:crypto";
-
-// Longitud mínima exigida al ADMIN_PIN configurado. Con rate-limiting sólo de
-// apoyo, la longitud del secreto es la defensa real contra la fuerza bruta.
-export const MIN_ADMIN_PIN = 12;
+import type { NextRequest } from "next/server";
+import { COOKIE_SESION, sesionValida } from "./session";
 
 /**
- * Comprueba el PIN de administración contra la variable de entorno ADMIN_PIN
- * usando comparación en tiempo constante (evita oráculos de temporización).
+ * Autenticación del panel de administración con DOBLE FACTOR:
+ *   1. PIN (algo que sabes)          → variable de entorno ADMIN_PIN.
+ *   2. Código TOTP (algo que tienes) → ver lib/totp.ts.
  *
- * Un ADMIN_PIN ausente o demasiado corto se trata como configuración inválida:
- * en producción se bloquean todas las operaciones de admin (con aviso en logs);
- * en desarrollo se permite un PIN corto para no entorpecer las pruebas locales.
+ * Superados ambos en /api/admin/login se emite una cookie de sesión firmada
+ * (lib/session.ts). Las rutas protegidas ya NO reciben el PIN en cada petición:
+ * validan esa cookie con `tieneSesionAdmin()`.
  */
-export function pinValido(pinRecibido: string | null | undefined): boolean {
-  const esperado = process.env.ADMIN_PIN;
-  if (!esperado) {
-    // Sin ADMIN_PIN configurado no se permite ninguna operación de admin.
-    return false;
+
+// Longitud mínima exigida al ADMIN_PIN en producción.
+export const MIN_ADMIN_PIN = 12;
+
+export class AdminAuthError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "AdminAuthError";
   }
-  if (esperado.length < MIN_ADMIN_PIN && process.env.NODE_ENV === "production") {
-    console.error(
-      `ADMIN_PIN demasiado corto (${esperado.length} caracteres); se requieren al menos ` +
-        `${MIN_ADMIN_PIN}. Operaciones de administración bloqueadas hasta configurar un PIN fuerte.`,
+}
+
+/** ADMIN_PIN configurado y bien formado; lanza AdminAuthError(500) si no. */
+function pinEsperado(): string {
+  const pin = process.env.ADMIN_PIN;
+  if (!pin || pin.length === 0) {
+    throw new AdminAuthError(500, "ADMIN_PIN no está configurado en el servidor.");
+  }
+  if (process.env.NODE_ENV === "production" && pin.length < MIN_ADMIN_PIN) {
+    throw new AdminAuthError(
+      500,
+      `ADMIN_PIN debe tener al menos ${MIN_ADMIN_PIN} caracteres en producción.`,
     );
-    return false;
   }
-  if (typeof pinRecibido !== "string" || pinRecibido.length === 0) {
-    return false;
-  }
-  const a = Buffer.from(pinRecibido);
-  const b = Buffer.from(esperado);
-  // timingSafeEqual exige misma longitud; la diferencia de longitud no se
-  // compara byte a byte, pero el espacio de un PIN es acotado y aceptable.
+  return pin;
+}
+
+/** Primer factor: ¿el PIN recibido es correcto? (comparación en tiempo constante). */
+export function pinCorrecto(pin: unknown): boolean {
+  if (typeof pin !== "string" || pin.length === 0) return false;
+  const a = Buffer.from(pin);
+  const b = Buffer.from(pinEsperado());
   if (a.length !== b.length) return false;
   return timingSafeEqual(a, b);
 }
 
-/**
- * Extrae el PIN de administración EXCLUSIVAMENTE de la cabecera "x-admin-pin".
- * No se acepta en el cuerpo para evitar que aparezca en logs de proxies.
- */
-export function extraerPin(req: Request): string | null {
-  return req.headers.get("x-admin-pin");
+/** ¿La petición trae una cookie de sesión de administración válida y no caducada? */
+export function tieneSesionAdmin(req: NextRequest): boolean {
+  return sesionValida(req.cookies.get(COOKIE_SESION)?.value);
 }

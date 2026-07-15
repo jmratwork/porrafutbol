@@ -129,3 +129,28 @@ export async function limpiarFallos(k: string): Promise<void> {
     memoria.delete(k);
   }
 }
+
+// --- Anti-replay del TOTP -------------------------------------------------
+// Un código TOTP no debe poder reutilizarse dentro de su ventana de validez.
+// Guardamos el último "paso" consumido (compartido vía KV si está configurado;
+// si no, por instancia en memoria).
+
+let ultimoStepTotp = 0;
+
+/** ¿El paso TOTP ya se había usado? Registra el paso si es nuevo. */
+export async function pasoTotpYaUsado(paso: number): Promise<boolean> {
+  const cfg = kvConfig();
+  if (cfg) {
+    try {
+      const last = Number((await kvCmd(cfg, ["GET", "totp:last"])) ?? 0);
+      if (paso <= last) return true;
+      await kvCmd(cfg, ["SET", "totp:last", String(paso)]);
+      return false;
+    } catch {
+      // Cae al control en memoria si el KV falla.
+    }
+  }
+  if (paso <= ultimoStepTotp) return true;
+  ultimoStepTotp = paso;
+  return false;
+}

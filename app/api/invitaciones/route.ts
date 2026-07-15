@@ -1,8 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { admiteApuestas, obtenerPorraActiva } from "@/lib/estado";
 import { normalizarNombre, validarNombre } from "@/lib/validation";
-import { extraerPin, pinValido } from "@/lib/auth";
-import { ipDe, limpiarFallos, rateLimitOk, registrarFallo } from "@/lib/rateLimit";
+import { tieneSesionAdmin } from "@/lib/auth";
 import { firmarInvitacion } from "@/lib/invitacion";
 import { MAX_APOSTANTES } from "@/lib/types";
 
@@ -16,26 +15,20 @@ const MAX_NOMBRES = 100;
  * Cuerpo `{ nombres: string[] }`. Cada enlace autoriza a apostar EXACTAMENTE con
  * ese nombre en la porra activa. Nunca se registran el secreto ni las firmas.
  */
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  if (!tieneSesionAdmin(req)) {
+    return NextResponse.json(
+      { error: "Sesión de administración no válida o caducada." },
+      { status: 401 },
+    );
+  }
+
   let body: Record<string, unknown>;
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Cuerpo de la petición no válido." }, { status: 400 });
   }
-
-  const ip = ipDe(req);
-  if (!(await rateLimitOk(ip))) {
-    return NextResponse.json(
-      { error: "Demasiados intentos. Espera unos minutos." },
-      { status: 429 },
-    );
-  }
-  if (!pinValido(extraerPin(req))) {
-    await registrarFallo(ip);
-    return NextResponse.json({ error: "No autorizado." }, { status: 403 });
-  }
-  await limpiarFallos(ip);
 
   const porra = await obtenerPorraActiva();
   if (!porra) {

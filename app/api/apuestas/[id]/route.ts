@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { admiteApuestas, obtenerEstadoActual } from "@/lib/estado";
 import { validarGoles } from "@/lib/validation";
 import { compararCodigo } from "@/lib/codigo";
-import { extraerPin, pinValido } from "@/lib/auth";
+import { tieneSesionAdmin } from "@/lib/auth";
 import { ipDe, limpiarFallos, rateLimitOk, registrarFallo } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ function extraerCodigo(req: Request, body?: Record<string, unknown>): string | n
  * PATCH /api/apuestas/[id] → editar el marcador de una apuesta propia.
  * Requiere el código secreto de la apuesta. Sólo mientras la porra esté ABIERTA.
  */
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   let body: Record<string, unknown>;
   try {
@@ -88,7 +88,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
  * válido (rescate). El dueño sólo puede borrar mientras la porra esté ABIERTA;
  * el admin también con la porra CERRADA, pero nunca una vez FINALIZADA.
  */
-export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   let body: Record<string, unknown> = {};
   try {
@@ -116,7 +116,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
   const codigo = extraerCodigo(req, body);
   const esDueno = !!codigo && compararCodigo(codigo, apuesta.codigoHash);
-  const esAdmin = pinValido(extraerPin(req));
+  const esAdmin = tieneSesionAdmin(req);
 
   if (!esDueno && !esAdmin) {
     await registrarFallo(ip);

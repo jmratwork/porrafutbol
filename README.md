@@ -56,29 +56,48 @@ cp .env.example .env
 ```env
 DATABASE_URL="postgresql://usuario:password@host:5432/porra?sslmode=require"
 ADMIN_PIN="cambia-esto-por-un-pin-largo-y-aleatorio"
+SESSION_SECRET="cambia-esto-por-una-cadena-larga-y-aleatoria"
+TOTP_SECRET=""
 APUESTA_SECRET="cambia-esto-por-una-cadena-larga-y-aleatoria"
 INVITE_SECRET="cambia-esto-por-otra-cadena-larga-y-aleatoria"
 ```
 
 - **`DATABASE_URL`**: cadena de conexión a tu Postgres.
-- **`ADMIN_PIN`**: secreto para el panel `/admin` y las mutaciones de la API. En producción
-  debe tener **al menos 12 caracteres**; si es más corto, las acciones de admin se bloquean.
+- **`ADMIN_PIN`**: **primer factor** del panel `/admin`. En producción debe tener
+  **al menos 12 caracteres**; si es más corto, las acciones de admin se bloquean.
+- **`SESSION_SECRET`**: firma la cookie de sesión del admin. **Obligatorio en producción**.
+- **`TOTP_SECRET`**: **segundo factor** (2FA) del admin, secreto TOTP en base32. Genéralo con
+  `npm run totp:setup`. **Obligatorio en producción**; si se deja vacío en desarrollo, se
+  omite el 2FA (sólo se pide el PIN).
 - **`APUESTA_SECRET`**: secreto para los códigos de cada apuesta. **Obligatorio en producción**
   (si falta, el servidor aborta en vez de usar un valor por defecto público).
 - **`INVITE_SECRET`**: secreto para firmar las invitaciones (distinto de `APUESTA_SECRET`).
   **Obligatorio en producción**, con el mismo comportamiento de fallo si falta.
 
-**Cómo generar los secretos.** `APUESTA_SECRET` e `INVITE_SECRET` deben ser cadenas largas y
-aleatorias, **distintas entre sí** (y el `ADMIN_PIN`, de al menos 12 caracteres). Genera un
-valor nuevo para **cada uno** con cualquiera de estos comandos:
+**Cómo generar los secretos.** `SESSION_SECRET`, `APUESTA_SECRET` e `INVITE_SECRET` deben ser
+cadenas largas y aleatorias, **distintas entre sí** (y el `ADMIN_PIN`, de al menos 12
+caracteres). Genera un valor nuevo para **cada uno** con cualquiera de estos comandos:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"   # con Node
 openssl rand -hex 32                                                       # o con OpenSSL
 ```
 
-Pega cada resultado en su variable, tanto en el `.env` local como en las variables de entorno
-de Vercel.
+Para el `TOTP_SECRET` usa `npm run totp:setup`: genera el secreto, muestra un **QR** para
+escanearlo con tu app de autenticación (Google Authenticator, Authy, 1Password…) y te da el
+valor a pegar en la variable. Pega cada secreto tanto en el `.env` local como en las variables
+de entorno de Vercel.
+
+### Doble factor (2FA) del panel de administración
+
+El acceso a `/admin` está protegido con **dos factores**:
+
+1. **PIN** (`ADMIN_PIN`) — algo que sabes.
+2. **Código TOTP** de tu app de autenticación (`TOTP_SECRET`) — algo que tienes.
+
+Superados ambos, el servidor emite una **cookie de sesión firmada** (`httpOnly`, `Secure`,
+`SameSite=Strict`, 8 h). A partir de ahí, las acciones del panel se autorizan con esa cookie:
+el PIN ya **no** viaja en cada petición. Puedes cerrar sesión desde el propio panel.
 
 ### 3. Crear las tablas (migraciones de Prisma)
 
@@ -119,13 +138,15 @@ Cualquiera de estas opciones funciona; copia su cadena de conexión en `DATABASE
 1. Sube el repositorio a GitHub/GitLab e impórtalo en [vercel.com](https://vercel.com).
 2. En **Settings → Environment Variables** añade:
    - `DATABASE_URL` (si usas Vercel Postgres se añade sola al crear la base de datos).
-   - `ADMIN_PIN` (mínimo 12 caracteres), `APUESTA_SECRET` e `INVITE_SECRET` (cadenas largas
-     y aleatorias, distintas entre sí). Los dos secretos son **obligatorios en producción**.
+   - `ADMIN_PIN` (mínimo 12 caracteres), `SESSION_SECRET`, `TOTP_SECRET` (genéralo con
+     `npm run totp:setup`), `APUESTA_SECRET` e `INVITE_SECRET` — **obligatorios en
+     producción**, aleatorios y distintos entre sí.
 3. **Deploy.** No hace falta configurar nada más: Vercel detecta el script
    `vercel-build` del `package.json`, que ejecuta automáticamente
    `prisma generate && prisma migrate deploy && next build`. Es decir, **las tablas se
    crean (y migran) solas** en producción en cada despliegue.
-4. Abre tu dominio de Vercel, entra en `/admin`, introduce el `ADMIN_PIN` y crea la porra.
+4. Abre tu dominio de Vercel, entra en `/admin`, **inicia sesión (PIN + código de tu app de
+   autenticación)** y crea la porra.
 
 > **Seguridad de las migraciones.** `prisma migrate deploy` sólo aplica migraciones ya
 > commiteadas en `prisma/migrations/` (nunca genera cambios por su cuenta). Para que ese
@@ -140,19 +161,23 @@ Cualquiera de estas opciones funciona; copia su cadena de conexión en `DATABASE
 
 ## API
 
-| Método | Ruta            | Descripción                                            | PIN |
-| ------ | --------------- | ------------------------------------------------------ | --- |
-| GET    | `/api/porra`    | Estado actual: porra + apuestas + bote + ganadores.    | No  |
-| POST   | `/api/porra`    | Crear la porra (equipos, fecha/hora, precio).          | Sí  |
-| PATCH  | `/api/porra`    | `accion`: `CERRAR` \| `FINALIZAR` (`ABRIR` ya no reabre; **409**). | Sí  |
-| DELETE | `/api/porra`    | Reiniciar (borra porra y apuestas).                    | Sí  |
-| POST   | `/api/invitaciones` | Generar enlaces de invitación (`{ nombres: string[] }`); **409** si la porra está cerrada, empezada o llena. | Sí  |
+| Método | Ruta            | Descripción                                            | Auth |
+| ------ | --------------- | ------------------------------------------------------ | ---- |
+| POST   | `/api/admin/login`   | Login del admin (PIN + código TOTP → cookie de sesión). | —    |
+| POST   | `/api/admin/logout`  | Cierra la sesión (borra la cookie).                | Sesión |
+| GET    | `/api/admin/session` | Estado de la sesión para la pantalla de login.     | —    |
+| GET    | `/api/porra`    | Estado actual: porra + apuestas + bote + ganadores.    | No   |
+| POST   | `/api/porra`    | Crear la porra (equipos, fecha/hora, precio).          | Sesión |
+| PATCH  | `/api/porra`    | `accion`: `CERRAR` \| `FINALIZAR` (`ABRIR` ya no reabre; **409**). | Sesión |
+| DELETE | `/api/porra`    | Reiniciar (borra porra y apuestas).                    | Sesión |
+| POST   | `/api/invitaciones` | Generar enlaces de invitación (`{ nombres: string[] }`); **409** si la porra está cerrada, empezada o llena. | Sesión |
 | POST   | `/api/apuestas` | Crear una apuesta (requiere **invitación** + marcador). Devuelve un código secreto. | Invitación |
 | PATCH  | `/api/apuestas/:id` | Editar el marcador de una apuesta (requiere su código). | Código |
-| DELETE | `/api/apuestas/:id` | Borrar una apuesta (código de su dueño **o** PIN de admin). | Código/PIN |
+| DELETE | `/api/apuestas/:id` | Borrar una apuesta (código de su dueño **o** sesión de admin). | Código/Sesión |
 
-El PIN se envía en la cabecera `x-admin-pin`. Si es incorrecto, la API responde **401**
-(o **403** en `/api/invitaciones`). Si la porra está completa o cerrada al apostar, responde **409**.
+Las rutas marcadas **Sesión** exigen la cookie de administración emitida por `/api/admin/login`
+tras el doble factor; sin ella responden **401**. Si la porra está completa o cerrada al apostar,
+responde **409**.
 
 **Cierre automático**: las apuestas se cierran solas al llegar la **hora de inicio del
 partido**, aunque el organizador no la cierre a mano. A partir de ese momento la API

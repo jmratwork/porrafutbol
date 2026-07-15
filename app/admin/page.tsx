@@ -6,13 +6,28 @@ import { formatearEuros, formatearFecha } from "@/lib/format";
 import { MAX_APOSTANTES, MAX_GOLES, type EstadoActualDTO } from "@/lib/types";
 
 export default function AdminPage() {
+  // null = comprobando la sesión; false = hay que iniciar sesión; true = dentro.
+  const [autenticado, setAutenticado] = useState<boolean | null>(null);
+  const [totpRequerido, setTotpRequerido] = useState(true);
+  const [avisoLogin, setAvisoLogin] = useState<string | null>(null);
+
   const [estado, setEstado] = useState<EstadoActualDTO | null>(null);
-  const [cargando, setCargando] = useState(true);
-  // El PIN se mantiene SÓLO en memoria durante la vida de la página; no se
-  // persiste en sessionStorage/localStorage para no exponerlo ante un XSS.
-  const [pin, setPin] = useState("");
   const [toast, setToast] = useState<ToastData | null>(null);
   const [trabajando, setTrabajando] = useState(false);
+
+  // Comprueba la sesión al montar.
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/session", { cache: "no-store" });
+        const data = await res.json();
+        setTotpRequerido(Boolean(data.totpRequerido));
+        setAutenticado(Boolean(data.autenticado));
+      } catch {
+        setAutenticado(false);
+      }
+    })();
+  }, []);
 
   const cargar = useCallback(async () => {
     try {
@@ -21,32 +36,38 @@ export default function AdminPage() {
       setEstado(data);
     } catch {
       setToast({ tipo: "error", mensaje: "No se pudo cargar el estado." });
-    } finally {
-      setCargando(false);
     }
   }, []);
 
+  // Al autenticarse, carga el estado.
   useEffect(() => {
-    cargar();
-  }, [cargar]);
+    if (autenticado) cargar();
+  }, [autenticado, cargar]);
 
-  /** Realiza una petición con el PIN en cabecera y gestiona errores comunes. */
+  /** La sesión ya no vale: vuelve a la pantalla de login. */
+  const forzarLogin = useCallback(() => {
+    setAutenticado(false);
+    setEstado(null);
+    setAvisoLogin("Tu sesión ha caducado. Vuelve a iniciar sesión.");
+  }, []);
+
+  /** Mutación del panel; la autoriza la cookie de sesión (no se envía el PIN). */
   const peticion = async (
     metodo: "POST" | "PATCH" | "DELETE",
     body: Record<string, unknown>,
     mensajeExito: string,
   ) => {
-    if (!pin) {
-      setToast({ tipo: "error", mensaje: "Introduce el PIN de administración." });
-      return false;
-    }
     setTrabajando(true);
     try {
       const res = await fetch("/api/porra", {
         method: metodo,
-        headers: { "Content-Type": "application/json", "x-admin-pin": pin },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+      if (res.status === 401) {
+        forzarLogin();
+        return false;
+      }
       const data = await res.json();
       if (!res.ok) {
         setToast({ tipo: "error", mensaje: data.error ?? "Operación fallida." });
@@ -63,19 +84,16 @@ export default function AdminPage() {
     }
   };
 
-  /** Borra una apuesta concreta usando el PIN (rescate del administrador). */
+  /** Borra una apuesta concreta (rescate del administrador). */
   const eliminarApuesta = async (id: string) => {
-    if (!pin) {
-      setToast({ tipo: "error", mensaje: "Introduce el PIN de administración." });
-      return;
-    }
     if (!window.confirm("¿Borrar esta apuesta? (rescate de administración)")) return;
     setTrabajando(true);
     try {
-      const res = await fetch(`/api/apuestas/${id}`, {
-        method: "DELETE",
-        headers: { "x-admin-pin": pin },
-      });
+      const res = await fetch(`/api/apuestas/${id}`, { method: "DELETE" });
+      if (res.status === 401) {
+        forzarLogin();
+        return;
+      }
       const data = await res.json();
       if (!res.ok) {
         setToast({ tipo: "error", mensaje: data.error ?? "No se pudo borrar la apuesta." });
@@ -90,7 +108,19 @@ export default function AdminPage() {
     }
   };
 
-  if (cargando) {
+  const cerrarSesion = async () => {
+    try {
+      await fetch("/api/admin/logout", { method: "POST" });
+    } catch {
+      // Aunque falle la red, cerramos la sesión en el cliente.
+    }
+    setEstado(null);
+    setAutenticado(false);
+    setAvisoLogin(null);
+  };
+
+  // ---- Render ----
+  if (autenticado === null) {
     return (
       <main className="mx-auto flex min-h-screen max-w-2xl items-center justify-center p-6">
         <p className="animate-pulse text-cesped-300">Cargando…</p>
@@ -98,51 +128,193 @@ export default function AdminPage() {
     );
   }
 
+  if (!autenticado) {
+    return (
+      <LoginAdmin
+        totpRequerido={totpRequerido}
+        avisoInicial={avisoLogin}
+        onAutenticado={() => {
+          setAvisoLogin(null);
+          setAutenticado(true);
+        }}
+      />
+    );
+  }
+
   const porra = estado?.porra ?? null;
 
   return (
     <main className="mx-auto max-w-2xl px-4 pb-16 pt-6 sm:pt-10">
-      <header className="mb-6 flex items-center justify-between">
+      <header className="mb-6 flex items-center justify-between gap-3">
         <h1 className="text-2xl font-black text-white">⚙️ Administración</h1>
-        <a href="/" className="text-sm text-cesped-300 underline transition hover:text-cesped-200">
-          Ver porra
-        </a>
+        <div className="flex items-center gap-4 text-sm">
+          <a href="/" className="text-cesped-300 underline transition hover:text-cesped-200">
+            Ver porra
+          </a>
+          <button
+            onClick={cerrarSesion}
+            className="rounded-lg border border-white/15 px-3 py-1.5 text-slate-200 transition hover:bg-white/[0.08]"
+          >
+            Cerrar sesión
+          </button>
+        </div>
       </header>
 
-      {/* PIN */}
-      <section className="mb-6 card p-5">
-        <label htmlFor="pin" className="label">
-          PIN de administración
-        </label>
-        <input
-          id="pin"
-          type="password"
-          value={pin}
-          onChange={(e) => setPin(e.target.value)}
-          placeholder="Introduce el PIN"
-          autoComplete="current-password"
-          className="input"
-        />
-        <p className="mt-2 text-xs text-slate-400">
-          Necesario para todas las acciones de administración. Por seguridad no se guarda:
-          tendrás que introducirlo en cada sesión.
-        </p>
-      </section>
-
-      {porra ? (
+      {estado === null ? (
+        <p className="animate-pulse text-center text-cesped-300">Cargando…</p>
+      ) : porra ? (
         <GestionPorra
-          estado={estado!}
+          estado={estado}
           trabajando={trabajando}
           peticion={peticion}
           eliminarApuesta={eliminarApuesta}
-          pin={pin}
           onToast={setToast}
+          onSesionCaducada={forzarLogin}
         />
       ) : (
         <CrearPorra trabajando={trabajando} peticion={peticion} />
       )}
 
       <Toast data={toast} onClose={() => setToast(null)} />
+    </main>
+  );
+}
+
+/** Pantalla de login con doble factor: PIN y, si procede, código TOTP. */
+function LoginAdmin({
+  totpRequerido,
+  avisoInicial,
+  onAutenticado,
+}: {
+  totpRequerido: boolean;
+  avisoInicial: string | null;
+  onAutenticado: () => void;
+}) {
+  const [fase, setFase] = useState<"pin" | "codigo">("pin");
+  const [pin, setPin] = useState("");
+  const [code, setCode] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const [error, setError] = useState<string | null>(avisoInicial);
+
+  const enviar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setEnviando(true);
+    try {
+      const res = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(fase === "pin" ? { pin } : { pin, code }),
+      });
+      const data = await res.json();
+      if (res.ok && data.requiereCodigo) {
+        setFase("codigo");
+        return;
+      }
+      if (res.ok && data.autenticado) {
+        onAutenticado();
+        return;
+      }
+      setError(data.error ?? "No se pudo iniciar sesión.");
+    } catch {
+      setError("Error de red. Inténtalo de nuevo.");
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  return (
+    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-10">
+      <header className="mb-6 text-center">
+        <h1 className="text-2xl font-black text-white">⚙️ Administración</h1>
+        <p className="mt-1 text-sm text-slate-400">Acceso restringido al organizador.</p>
+      </header>
+
+      <section className="card p-5 sm:p-6">
+        <h2 className="mb-4 text-lg font-bold text-white">Iniciar sesión</h2>
+
+        {error && (
+          <p className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+            {error}
+          </p>
+        )}
+
+        <form onSubmit={enviar} className="flex flex-col gap-4" noValidate>
+          {fase === "pin" ? (
+            <div>
+              <label htmlFor="pin" className="label">
+                PIN de administración
+              </label>
+              <input
+                id="pin"
+                type="password"
+                required
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                placeholder="Introduce el PIN"
+                autoComplete="current-password"
+                autoFocus
+                className="input"
+              />
+            </div>
+          ) : (
+            <div>
+              <p className="mb-3 text-sm text-slate-300">
+                Introduce el código de 6 dígitos de tu app de autenticación.
+              </p>
+              <label htmlFor="code" className="label">
+                Código de verificación
+              </label>
+              <input
+                id="code"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="\d*"
+                maxLength={6}
+                required
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                placeholder="123456"
+                autoFocus
+                className="input text-center font-mono text-xl tracking-[0.4em]"
+              />
+            </div>
+          )}
+
+          <button type="submit" disabled={enviando} className="btn-primary w-full">
+            {enviando
+              ? fase === "pin"
+                ? "Comprobando…"
+                : "Verificando…"
+              : fase === "pin"
+                ? totpRequerido
+                  ? "Continuar"
+                  : "Entrar"
+                : "Verificar"}
+          </button>
+
+          {fase === "codigo" && (
+            <button
+              type="button"
+              onClick={() => {
+                setFase("pin");
+                setCode("");
+                setError(null);
+              }}
+              className="text-center text-xs text-slate-400 underline transition hover:text-slate-200"
+            >
+              Volver
+            </button>
+          )}
+        </form>
+      </section>
+
+      <p className="mt-4 text-center text-xs text-slate-500">
+        <a href="/" className="underline transition hover:text-slate-300">
+          Volver a la porra
+        </a>
+      </p>
     </main>
   );
 }
@@ -244,21 +416,21 @@ function CrearPorra({ trabajando, peticion }: { trabajando: boolean; peticion: P
   );
 }
 
-/** Gestión de una porra existente: abrir/cerrar, finalizar, reiniciar. */
+/** Gestión de una porra existente: invitaciones, cerrar, finalizar, reiniciar. */
 function GestionPorra({
   estado,
   trabajando,
   peticion,
   eliminarApuesta,
-  pin,
   onToast,
+  onSesionCaducada,
 }: {
   estado: EstadoActualDTO;
   trabajando: boolean;
   peticion: PeticionFn;
   eliminarApuesta: (id: string) => void;
-  pin: string;
   onToast: (t: ToastData) => void;
+  onSesionCaducada: () => void;
 }) {
   const porra = estado.porra!;
   // Abierta en la BD pero el partido ya empezó: cerrada automáticamente por hora.
@@ -328,7 +500,7 @@ function GestionPorra({
       {/* Invitaciones: sólo si la porra admite apuestas y no está llena (coincide
           con la guarda del servidor en POST /api/invitaciones). */}
       {estado.admiteApuestas && !estado.completa && (
-        <SeccionInvitaciones pin={pin} onToast={onToast} />
+        <SeccionInvitaciones onToast={onToast} onSesionCaducada={onSesionCaducada} />
       )}
 
       {/* Cerrar apuestas (irreversible) */}
@@ -492,21 +664,17 @@ function GestionPorra({
  * servidor; aquí sólo se muestran y se copian los enlaces resultantes.
  */
 function SeccionInvitaciones({
-  pin,
   onToast,
+  onSesionCaducada,
 }: {
-  pin: string;
   onToast: (t: ToastData) => void;
+  onSesionCaducada: () => void;
 }) {
   const [nombres, setNombres] = useState("");
   const [generando, setGenerando] = useState(false);
   const [enlaces, setEnlaces] = useState<{ nombre: string; url: string }[]>([]);
 
   const generar = async () => {
-    if (!pin) {
-      onToast({ tipo: "error", mensaje: "Introduce el PIN de administración." });
-      return;
-    }
     const lista = nombres
       .split("\n")
       .map((s) => s.trim())
@@ -519,9 +687,13 @@ function SeccionInvitaciones({
     try {
       const res = await fetch("/api/invitaciones", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-pin": pin },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nombres: lista }),
       });
+      if (res.status === 401) {
+        onSesionCaducada();
+        return;
+      }
       const data = await res.json();
       if (!res.ok) {
         onToast({
