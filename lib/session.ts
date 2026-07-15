@@ -16,7 +16,14 @@ export const TTL_SESION_MS = 8 * 60 * 60 * 1000; // 8 horas
 
 function secreto(): string {
   const s = process.env.SESSION_SECRET;
-  if (s && s.length > 0) return s;
+  if (s && s.length > 0) {
+    // Una clave HMAC corta es forzable offline si se filtra un token: exigimos
+    // un mínimo razonable en producción (≥ 32 caracteres, ~ 128 bits en hex).
+    if (process.env.NODE_ENV === "production" && s.length < 32) {
+      throw new Error("SESSION_SECRET debe tener al menos 32 caracteres en producción.");
+    }
+    return s;
+  }
   if (process.env.NODE_ENV === "production") {
     throw new Error("SESSION_SECRET es obligatorio en producción.");
   }

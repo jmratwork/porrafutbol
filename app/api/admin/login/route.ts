@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { AdminAuthError, pinCorrecto } from "@/lib/auth";
 import { comprobarTotp, totpRequerido } from "@/lib/totp";
 import { crearTokenSesion, COOKIE_SESION, TTL_SESION_MS } from "@/lib/session";
-import { ipDe, limpiarFallos, pasoTotpYaUsado, rateLimitOk, registrarFallo } from "@/lib/rateLimit";
+import { ipDe, limpiarFallos, pasoTotpYaUsado, rateLimitConsumir } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -18,8 +18,10 @@ export const dynamic = "force-dynamic";
  * Limitado por IP (rate limiting) para frenar la fuerza bruta.
  */
 export async function POST(req: NextRequest) {
+  // Cada petición consume un intento de forma atómica (evita que una ráfaga
+  // concurrente se salte el tope). Un login correcto limpia el contador.
   const clave = `login:${ipDe(req)}`;
-  if (!(await rateLimitOk(clave))) {
+  if (!(await rateLimitConsumir(clave))) {
     return NextResponse.json(
       { error: "Demasiados intentos. Espera unos minutos." },
       { status: 429 },
@@ -38,7 +40,6 @@ export async function POST(req: NextRequest) {
   try {
     // Primer factor.
     if (!pinCorrecto(pin)) {
-      await registrarFallo(clave);
       return NextResponse.json({ error: "PIN de administración incorrecto." }, { status: 401 });
     }
 
@@ -50,7 +51,6 @@ export async function POST(req: NextRequest) {
       }
       const totp = comprobarTotp(code);
       if (!totp.valido || (totp.paso !== null && (await pasoTotpYaUsado(totp.paso)))) {
-        await registrarFallo(clave);
         return NextResponse.json({ error: "Código de verificación incorrecto." }, { status: 401 });
       }
     }

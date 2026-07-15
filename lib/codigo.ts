@@ -28,7 +28,14 @@ export function generarCodigo(): string {
  */
 function secreto(): string {
   const s = process.env.APUESTA_SECRET;
-  if (s && s.length > 0) return s;
+  if (s && s.length > 0) {
+    // Un pepper corto permitiría falsificar códigos con un volcado de la BD:
+    // exigimos un mínimo razonable en producción (≥ 32 caracteres).
+    if (process.env.NODE_ENV === "production" && s.length < 32) {
+      throw new Error("APUESTA_SECRET debe tener al menos 32 caracteres en producción.");
+    }
+    return s;
+  }
   if (process.env.NODE_ENV === "production") {
     throw new Error(
       "APUESTA_SECRET no está configurado. Define un valor largo y aleatorio en el entorno.",

@@ -21,7 +21,14 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  */
 function secreto(): string {
   const s = process.env.INVITE_SECRET;
-  if (s && s.length > 0) return s;
+  if (s && s.length > 0) {
+    // Una clave HMAC corta permitiría falsificar invitaciones: exigimos un
+    // mínimo razonable en producción (≥ 32 caracteres).
+    if (process.env.NODE_ENV === "production" && s.length < 32) {
+      throw new Error("INVITE_SECRET debe tener al menos 32 caracteres en producción.");
+    }
+    return s;
+  }
   if (process.env.NODE_ENV === "production") {
     throw new Error(
       "INVITE_SECRET no está configurado. Define un valor largo y aleatorio en el entorno.",

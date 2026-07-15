@@ -84,7 +84,41 @@ function memFallo(k: string): void {
   e.count++;
 }
 
+/** Consume un intento en memoria y devuelve si SIGUE permitido (atómico por instancia). */
+function memConsumir(k: string): boolean {
+  const ahora = Date.now();
+  const e = memoria.get(k);
+  if (!e || ahora > e.resetAt) {
+    memoria.set(k, { count: 1, resetAt: ahora + VENTANA_S * 1000 });
+    return true;
+  }
+  e.count++;
+  return e.count <= MAX_FALLOS;
+}
+
 // --- API pública (async) --------------------------------------------------
+
+/**
+ * Consume un intento para la clave y responde si AÚN está permitido (por debajo
+ * del umbral). A diferencia de `rateLimitOk()` + `registrarFallo()`, aquí
+ * "comprobar" e "incrementar" son UNA sola operación atómica (INCR en KV): una
+ * ráfaga concurrente no puede colarse en el hueco entre leer y escribir el
+ * contador. Pensado para el login de administración (fuerza bruta de PIN/TOTP),
+ * donde cada petición cuenta como un intento y sólo un login correcto lo limpia.
+ */
+export async function rateLimitConsumir(k: string): Promise<boolean> {
+  const cfg = kvConfig();
+  if (!cfg) return memConsumir(k);
+  try {
+    const n = Number(await kvCmd(cfg, ["INCR", clave(k)]));
+    // Al primer intento, fijamos la caducidad de la ventana.
+    if (n === 1) await kvCmd(cfg, ["EXPIRE", clave(k), VENTANA_S]);
+    return n <= MAX_FALLOS;
+  } catch {
+    // Si el KV falla, no bloqueamos por un problema de infraestructura.
+    return memConsumir(k);
+  }
+}
 
 /** ¿Está la clave por debajo del umbral de fallos? (true = puede continuar). */
 export async function rateLimitOk(k: string): Promise<boolean> {
@@ -132,20 +166,34 @@ export async function limpiarFallos(k: string): Promise<void> {
 
 // --- Anti-replay del TOTP -------------------------------------------------
 // Un código TOTP no debe poder reutilizarse dentro de su ventana de validez.
-// Guardamos el último "paso" consumido (compartido vía KV si está configurado;
-// si no, por instancia en memoria).
+// Reservamos el "paso" consumido (compartido vía KV si está configurado; si no,
+// por instancia en memoria).
+
+// Marca de paso usado: caduca sola pasada holgadamente la ventana ±1 paso (90 s).
+const TOTP_STEP_TTL_S = 120;
 
 let ultimoStepTotp = 0;
 
-/** ¿El paso TOTP ya se había usado? Registra el paso si es nuevo. */
+/**
+ * ¿El paso TOTP ya se había usado? Reserva el paso de forma ATÓMICA con
+ * `SET … NX` (crear sólo si no existe): dos peticiones concurrentes con el mismo
+ * código no pueden superar ambas el anti-replay (antes había un hueco entre el
+ * GET y el SET). Devuelve true si el paso ya estaba reservado (código reutilizado).
+ */
 export async function pasoTotpYaUsado(paso: number): Promise<boolean> {
   const cfg = kvConfig();
   if (cfg) {
     try {
-      const last = Number((await kvCmd(cfg, ["GET", "totp:last"])) ?? 0);
-      if (paso <= last) return true;
-      await kvCmd(cfg, ["SET", "totp:last", String(paso)]);
-      return false;
+      const res = await kvCmd(cfg, [
+        "SET",
+        `totp:step:${paso}`,
+        "1",
+        "NX",
+        "EX",
+        TOTP_STEP_TTL_S,
+      ]);
+      // Upstash/Vercel KV devuelve "OK" si lo creó y null si la clave ya existía.
+      return res === null;
     } catch {
       // Cae al control en memoria si el KV falla.
     }
