@@ -19,8 +19,9 @@ Construida con **Next.js 15 (App Router) + TypeScript + Tailwind CSS** y persist
 - Una porra activa a la vez con estados **ABIERTA → CERRADA → FINALIZADA**.
 - Página pública `/`: cabecera tipo marcador, cuenta atrás, bote en vivo, formulario de
   apuesta, lista de apuestas y banner de ganadores.
-- Panel `/admin` protegido por PIN: crear porra, generar invitaciones, cerrar apuestas
-  (irreversible), introducir el resultado real y reiniciar.
+- Panel `/admin` protegido con **doble factor** (PIN + código TOTP) y sesión por cookie:
+  crear porra, generar invitaciones, cerrar apuestas (irreversible), introducir el resultado
+  real y reiniciar.
 - Límite estricto de 20 apuestas (con control de concurrencia en base de datos).
 - Cálculo de ganadores por acierto exacto o, en su defecto, por proximidad (distancia
   Manhattan), con reparto del bote a partes iguales en caso de empate.
@@ -65,14 +66,17 @@ INVITE_SECRET="cambia-esto-por-otra-cadena-larga-y-aleatoria"
 - **`DATABASE_URL`**: cadena de conexión a tu Postgres.
 - **`ADMIN_PIN`**: **primer factor** del panel `/admin`. En producción debe tener
   **al menos 12 caracteres**; si es más corto, las acciones de admin se bloquean.
-- **`SESSION_SECRET`**: firma la cookie de sesión del admin. **Obligatorio en producción**.
-- **`TOTP_SECRET`**: **segundo factor** (2FA) del admin, secreto TOTP en base32. Genéralo con
-  `npm run totp:setup`. **Obligatorio en producción**; si se deja vacío en desarrollo, se
-  omite el 2FA (sólo se pide el PIN).
+- **`SESSION_SECRET`**: firma la cookie de sesión del admin. **Obligatorio en producción**
+  y con **al menos 32 caracteres** (una clave HMAC corta sería forzable offline).
+- **`TOTP_SECRET`**: **segundo factor** (2FA) del admin, secreto TOTP en base32 de
+  **128 bits como mínimo**. Genéralo con `npm run totp:setup`. **Obligatorio en producción**;
+  si se deja vacío en desarrollo, se omite el 2FA (sólo se pide el PIN).
 - **`APUESTA_SECRET`**: secreto para los códigos de cada apuesta. **Obligatorio en producción**
-  (si falta, el servidor aborta en vez de usar un valor por defecto público).
+  y de **al menos 32 caracteres** (si falta, el servidor aborta en vez de usar un valor por
+  defecto público).
 - **`INVITE_SECRET`**: secreto para firmar las invitaciones (distinto de `APUESTA_SECRET`).
-  **Obligatorio en producción**, con el mismo comportamiento de fallo si falta.
+  **Obligatorio en producción**, mismo mínimo de 32 caracteres y mismo comportamiento de
+  fallo si falta.
 
 **Cómo generar los secretos.**
 
@@ -80,29 +84,47 @@ INVITE_SECRET="cambia-esto-por-otra-cadena-larga-y-aleatoria"
   **al menos 12 caracteres**; en producción, si es más corto, el admin queda bloqueado.
 - **`SESSION_SECRET`, `APUESTA_SECRET` e `INVITE_SECRET`**: cadenas largas, aleatorias y
   **distintas entre sí**. Genera un valor nuevo para **cada una** con cualquiera de estos
-  comandos:
+  comandos (dan 64 caracteres hexadecimales, por encima del mínimo de 32):
 
   ```bash
   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"   # con Node
   openssl rand -hex 32                                                       # o con OpenSSL
   ```
 
-- **`TOTP_SECRET`**: ejecuta `npm run totp:setup`. Genera el secreto, muestra un **QR** para
-  escanearlo con tu app de autenticación (Google Authenticator, Authy, 1Password…) y te da el
-  valor a pegar en la variable.
+- **`TOTP_SECRET`**: ejecuta `npm run totp:setup`. Genera el secreto (base32 de 160 bits),
+  muestra un **QR** para escanearlo con tu app de autenticación (Google Authenticator, Authy,
+  1Password…) y te da el valor a pegar en la variable.
+
+  > **Si vienes de una versión anterior a `otplib` 13**, tu `TOTP_SECRET` puede ser de 80 bits
+  > y ya **no es válido**: vuelve a ejecutar `npm run totp:setup` y escanea el QR nuevo. Si no
+  > lo haces, el login responde pidiendo justamente eso.
 
 Pega cada valor tanto en el `.env` local como en las variables de entorno de Vercel.
+
+**Rate-limiting (opcional).** El freno anti-fuerza-bruta del login y de los códigos de apuesta
+funciona sin configurar nada, con un contador **en memoria por instancia** (10 fallos por IP
+cada 15 min). Para que el límite —y el anti-replay de los códigos TOTP— se compartan entre
+instancias serverless, conecta un almacén KV en Vercel (*Storage* → Upstash Redis / Vercel KV):
+las variables `KV_REST_API_URL` / `KV_REST_API_TOKEN` (o sus equivalentes `UPSTASH_REDIS_REST_*`)
+se inyectan solas y la aplicación las usa automáticamente.
 
 ### Doble factor (2FA) del panel de administración
 
 El acceso a `/admin` está protegido con **dos factores**:
 
 1. **PIN** (`ADMIN_PIN`) — algo que sabes.
-2. **Código TOTP** de tu app de autenticación (`TOTP_SECRET`) — algo que tienes.
+2. **Código TOTP** de tu app de autenticación (`TOTP_SECRET`) — algo que tienes. Al teclear el
+   sexto dígito se verifica **solo**, sin pulsar nada (el botón *Verificar* sigue ahí como
+   respaldo).
 
 Superados ambos, el servidor emite una **cookie de sesión firmada** (`httpOnly`, `Secure`,
-`SameSite=Strict`, 8 h). A partir de ahí, las acciones del panel se autorizan con esa cookie:
-el PIN ya **no** viaja en cada petición. Puedes cerrar sesión desde el propio panel.
+`SameSite=Strict`, **60 min**). A partir de ahí, las acciones del panel se autorizan con esa
+cookie: el PIN ya **no** viaja en cada petición. Puedes cerrar sesión desde el propio panel.
+
+Detalles del endurecimiento: cada intento de login **consume** su cuota de forma atómica
+(una ráfaga concurrente no puede saltarse el tope), un código TOTP **no se puede reutilizar**
+dentro de su ventana de validez y, ante un error de configuración del servidor, la respuesta
+al cliente sin autenticar es **genérica** (el detalle sólo se registra en el log).
 
 ### 3. Crear las tablas (migraciones de Prisma)
 
@@ -143,9 +165,9 @@ Cualquiera de estas opciones funciona; copia su cadena de conexión en `DATABASE
 1. Sube el repositorio a GitHub/GitLab e impórtalo en [vercel.com](https://vercel.com).
 2. En **Settings → Environment Variables** añade:
    - `DATABASE_URL` (si usas Vercel Postgres se añade sola al crear la base de datos).
-   - `ADMIN_PIN` (mínimo 12 caracteres), `SESSION_SECRET`, `TOTP_SECRET` (genéralo con
-     `npm run totp:setup`), `APUESTA_SECRET` e `INVITE_SECRET` — **obligatorios en
-     producción**, aleatorios y distintos entre sí.
+   - `ADMIN_PIN` (mínimo 12 caracteres), `SESSION_SECRET`, `APUESTA_SECRET` e `INVITE_SECRET`
+     (mínimo **32 caracteres** cada uno) y `TOTP_SECRET` (genéralo con `npm run totp:setup`)
+     — **obligatorios en producción**, aleatorios y distintos entre sí.
 3. **Deploy.** No hace falta configurar nada más: Vercel detecta el script
    `vercel-build` del `package.json`, que ejecuta automáticamente
    `prisma generate && prisma migrate deploy && next build`. Es decir, **las tablas se
@@ -172,7 +194,7 @@ Cualquiera de estas opciones funciona; copia su cadena de conexión en `DATABASE
 | POST   | `/api/admin/logout`  | Cierra la sesión (borra la cookie).                | Sesión |
 | GET    | `/api/admin/session` | Estado de la sesión para la pantalla de login.     | —    |
 | GET    | `/api/porra`    | Estado actual: porra + apuestas + bote + ganadores.    | No   |
-| POST   | `/api/porra`    | Crear la porra (equipos, fecha/hora, precio).          | Sesión |
+| POST   | `/api/porra`    | Crear la porra (equipos, fecha/hora, precio); **409** si ya existe una (también si dos peticiones intentan crearla a la vez). | Sesión |
 | PATCH  | `/api/porra`    | `accion`: `CERRAR` \| `FINALIZAR` (`ABRIR` ya no reabre; **409**). | Sesión |
 | DELETE | `/api/porra`    | Reiniciar (borra porra y apuestas).                    | Sesión |
 | POST   | `/api/invitaciones` | Generar enlaces de invitación (`{ nombres: string[] }`); **409** si la porra está cerrada, empezada o llena. | Sesión |
@@ -250,24 +272,32 @@ app/
   api/
     porra/route.ts          # GET/POST/PATCH/DELETE de la porra
     apuestas/route.ts       # POST de apuestas (requiere invitación)
-    apuestas/[id]/route.ts  # PATCH/DELETE de una apuesta (código o PIN)
+    apuestas/[id]/route.ts  # PATCH/DELETE de una apuesta (código o sesión)
     invitaciones/route.ts   # POST: genera enlaces de invitación (admin)
+    admin/login/route.ts    # Login 2FA (PIN + TOTP) → cookie de sesión
+    admin/logout/route.ts   # Cierre de sesión
+    admin/session/route.ts  # Estado de la sesión (para la pantalla de login)
   page.tsx                  # Home pública
   admin/page.tsx            # Panel de administración
   layout.tsx, globals.css
 middleware.ts               # CSP basada en nonce por petición
+next.config.mjs             # Cabeceras de seguridad estáticas (HSTS, COOP/CORP…)
 components/                 # Marcador, Escudo, CuentaAtras, Toast
 lib/
   prisma.ts                 # Cliente Prisma
   porra.ts                  # Cálculo de bote y ganadores
   estado.ts                 # Construcción del estado actual (DTO)
   validation.ts             # Validaciones de entrada
-  auth.ts                   # Validación del PIN de admin
+  auth.ts                   # Comprobación del PIN y de la sesión de admin
+  session.ts                # Cookie de sesión firmada (HMAC, 60 min)
+  totp.ts                   # Segundo factor: verificación del código TOTP
   invitacion.ts             # Firma/verificación de invitaciones (HMAC)
   codigo.ts                 # Código secreto por apuesta (HMAC)
-  rateLimit.ts              # Freno anti-fuerza-bruta (KV o memoria)
+  rateLimit.ts              # Freno anti-fuerza-bruta y anti-replay TOTP (KV o memoria)
   fecha.ts                  # Interpretación de la hora en Barcelona
   format.ts, types.ts
+scripts/
+  totp-setup.mjs            # Enrolamiento del 2FA (`npm run totp:setup`)
 prisma/
   schema.prisma
   migrations/               # Migraciones listas para `migrate deploy`
