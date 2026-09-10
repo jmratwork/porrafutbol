@@ -256,10 +256,11 @@ Sea el **resultado real** `LR - VR` y cada apuesta `LA - VA`.
 
 ### Ejemplo 2 — nadie acierta, gana el más cercano
 
-- Precio: 3 €. Apuestas (5): Ana `1-0` (d=2), Luis `3-1` (d=2), Eva `2-2` (d=3),
+- Precio: 3 €. Apuestas (5): Ana `1-0` (d=2), Luis `3-2` (d=2), Eva `0-0` (d=3),
   Sara `2-0` (d=1), Nuria `0-3` (d=4). Resultado real: **2-1**.
 - Bote = 5 × 3 = **15 €**. Distancia mínima = 1 (Sara) → Sara gana **15,00 €**.
-- Si Sara no existiera, empatarían Ana y Luis (d=2) → 15 / 2 = **7,50 € cada uno**.
+- Si Sara hubiera apostado `3-0` (d=2), empatarían Ana, Luis y Sara → 15 / 3 =
+  **5,00 € cada uno**.
 
 La lógica está en [`lib/porra.ts`](lib/porra.ts).
 
