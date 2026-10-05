@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { motivoSecretoDebil } from "./secretos";
 
 /**
  * Invitación firmada por el organizador (admin) para autorizar una apuesta con
@@ -22,10 +23,11 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 function secreto(): string {
   const s = process.env.INVITE_SECRET;
   if (s && s.length > 0) {
-    // Una clave HMAC corta permitiría falsificar invitaciones: exigimos un
-    // mínimo razonable en producción (≥ 32 caracteres).
-    if (process.env.NODE_ENV === "production" && s.length < 32) {
-      throw new Error("INVITE_SECRET debe tener al menos 32 caracteres en producción.");
+    // Una clave HMAC corta —o un placeholder copiado de .env.example—
+    // permitiría falsificar invitaciones.
+    if (process.env.NODE_ENV === "production") {
+      const motivo = motivoSecretoDebil("INVITE_SECRET", s, { min: 32 });
+      if (motivo) throw new Error(motivo);
     }
     return s;
   }

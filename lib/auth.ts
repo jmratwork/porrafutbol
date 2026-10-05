@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { COOKIE_SESION, sesionValida } from "./session";
+import { motivoSecretoDebil } from "./secretos";
 
 /**
  * Autenticación del panel de administración con DOBLE FACTOR:
@@ -31,11 +32,14 @@ function pinEsperado(): string {
   if (!pin || pin.length === 0) {
     throw new AdminAuthError(500, "ADMIN_PIN no está configurado en el servidor.");
   }
-  if (process.env.NODE_ENV === "production" && pin.length < MIN_ADMIN_PIN) {
-    throw new AdminAuthError(
-      500,
-      `ADMIN_PIN debe tener al menos ${MIN_ADMIN_PIN} caracteres en producción.`,
-    );
+  if (process.env.NODE_ENV === "production") {
+    // Sin exigir variedad de caracteres: el PIN lo elige una persona y puede
+    // ser una frase. Sí se rechaza el placeholder de .env.example.
+    const motivo = motivoSecretoDebil("ADMIN_PIN", pin, {
+      min: MIN_ADMIN_PIN,
+      exigirVariedad: false,
+    });
+    if (motivo) throw new AdminAuthError(500, motivo);
   }
   return pin;
 }

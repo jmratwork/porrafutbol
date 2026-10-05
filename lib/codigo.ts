@@ -1,4 +1,5 @@
 import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
+import { motivoSecretoDebil } from "./secretos";
 
 /**
  * Código secreto por apuesta: permite a su dueño editarla o borrarla sin cuentas.
@@ -29,10 +30,11 @@ export function generarCodigo(): string {
 function secreto(): string {
   const s = process.env.APUESTA_SECRET;
   if (s && s.length > 0) {
-    // Un pepper corto permitiría falsificar códigos con un volcado de la BD:
-    // exigimos un mínimo razonable en producción (≥ 32 caracteres).
-    if (process.env.NODE_ENV === "production" && s.length < 32) {
-      throw new Error("APUESTA_SECRET debe tener al menos 32 caracteres en producción.");
+    // Un pepper corto —o un placeholder copiado de .env.example— permitiría
+    // falsificar códigos con un volcado de la BD.
+    if (process.env.NODE_ENV === "production") {
+      const motivo = motivoSecretoDebil("APUESTA_SECRET", s, { min: 32 });
+      if (motivo) throw new Error(motivo);
     }
     return s;
   }

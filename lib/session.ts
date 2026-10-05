@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { motivoSecretoDebil } from "./secretos";
 
 /**
  * Sesión de administración mediante cookie firmada (HMAC-SHA256).
@@ -19,10 +20,11 @@ export const TTL_SESION_MS = 60 * 60 * 1000; // 60 minutos
 function secreto(): string {
   const s = process.env.SESSION_SECRET;
   if (s && s.length > 0) {
-    // Una clave HMAC corta es forzable offline si se filtra un token: exigimos
-    // un mínimo razonable en producción (≥ 32 caracteres, ~ 128 bits en hex).
-    if (process.env.NODE_ENV === "production" && s.length < 32) {
-      throw new Error("SESSION_SECRET debe tener al menos 32 caracteres en producción.");
+    // Una clave HMAC corta es forzable offline si se filtra un token, y un
+    // placeholder copiado de .env.example es directamente público.
+    if (process.env.NODE_ENV === "production") {
+      const motivo = motivoSecretoDebil("SESSION_SECRET", s, { min: 32 });
+      if (motivo) throw new Error(motivo);
     }
     return s;
   }

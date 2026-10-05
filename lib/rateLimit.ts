@@ -31,6 +31,17 @@ export function ipDe(req: Request): string {
   return "desconocida";
 }
 
+/**
+ * Clave de rate-limit a partir de una IP. En IPv6 se reduce al prefijo /64:
+ * un atacante doméstico suele disponer de un /64 completo (2^64 direcciones),
+ * así que indexar por la dirección exacta le daría un cubo nuevo por intento.
+ */
+export function claveIp(ip: string): string {
+  if (!ip.includes(":")) return ip;
+  const [cabeza] = ip.split("::");
+  return cabeza.split(":").slice(0, 4).join(":");
+}
+
 // --- Almacén KV opcional (Upstash Redis REST / Vercel KV) -----------------
 
 function kvConfig(): { url: string; token: string } | null {
@@ -117,6 +128,36 @@ export async function rateLimitConsumir(k: string): Promise<boolean> {
   } catch {
     // Si el KV falla, no bloqueamos por un problema de infraestructura.
     return memConsumir(k);
+  }
+}
+
+/** Deshace en memoria un intento consumido. */
+function memDevolver(k: string): void {
+  const e = memoria.get(k);
+  if (!e) return;
+  e.count--;
+  if (e.count <= 0) memoria.delete(k);
+}
+
+/**
+ * Devuelve un intento previamente consumido con `rateLimitConsumir`.
+ *
+ * Se usa tras un acierto: así el intento se reserva de forma atómica ANTES de
+ * comparar (lo que cierra la carrera de "comprobar y luego registrar") pero el
+ * uso legítimo no gasta cuota. Sin esto, diez fallos de cualquiera dejarían sin
+ * servicio durante la ventana a todo el que comparta la IP (un NAT doméstico).
+ */
+export async function devolverIntento(k: string): Promise<void> {
+  const cfg = kvConfig();
+  if (!cfg) {
+    memDevolver(k);
+    return;
+  }
+  try {
+    const n = Number(await kvCmd(cfg, ["DECR", clave(k)]));
+    if (n <= 0) await kvCmd(cfg, ["DEL", clave(k)]);
+  } catch {
+    memDevolver(k);
   }
 }
 

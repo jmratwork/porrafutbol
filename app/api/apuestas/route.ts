@@ -95,9 +95,14 @@ export async function POST(req: Request) {
     const codigoHash = hashCodigo(codigo);
 
     // Re-comprobación del límite, el estado y la unicidad dentro de una
-    // transacción para evitar condiciones de carrera al acercarse a las 20
-    // apuestas o ante envíos simultáneos del mismo nombre.
-    const apuestaId = await prisma.$transaction(async (tx) => {
+    // transacción SERIALIZABLE. El nivel importa: con el aislamiento por
+    // defecto (READ COMMITTED) dos envíos simultáneos con nombres distintos
+    // leen ambos el mismo `count` y ambos insertan, de modo que el tope de 20
+    // se puede superar (el índice único sólo evita nombres repetidos, no limita
+    // el número de filas). En SERIALIZABLE, Postgres detecta el conflicto entre
+    // la lectura del recuento y la inserción ajena y aborta una (P2034).
+    const apuestaId = await prisma.$transaction(
+      async (tx) => {
       const count = await tx.apuesta.count({ where: { porraId: porra.id } });
       if (count >= MAX_APOSTANTES) {
         throw new Error("PORRA_COMPLETA");
@@ -128,7 +133,9 @@ export async function POST(req: Request) {
         select: { id: true },
       });
       return creada.id;
-    });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
 
     await limpiarFallos(ip);
     const estado = await obtenerEstadoActual();
@@ -156,6 +163,14 @@ export async function POST(req: Request) {
     ) {
       return NextResponse.json(
         { error: "Ya existe una apuesta con ese nombre. Elige otro." },
+        { status: 409 },
+      );
+    }
+    // Conflicto de serialización: otro envío simultáneo ganó la carrera. No es
+    // un error del cliente, así que se le pide reintentar en vez de un 500.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+      return NextResponse.json(
+        { error: "Varias apuestas llegaron a la vez. Vuelve a intentarlo." },
         { status: 409 },
       );
     }
