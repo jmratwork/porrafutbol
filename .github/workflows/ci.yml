@@ -31,6 +31,11 @@ jobs:
       - name: Tipos
         run: npx tsc --noEmit
 
+      # `eslint .` directamente, no `next lint`: este último está deprecado y
+      # desaparece en Next 16.
+      - name: Lint
+        run: npm run lint
+
       # Compila el cliente de Prisma y la aplicación. No necesita base de datos:
       # todas las rutas son dinámicas (force-dynamic).
       - name: Build

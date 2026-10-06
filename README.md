@@ -307,6 +307,7 @@ app/
   layout.tsx, globals.css
 middleware.ts               # CSP basada en nonce por petición
 next.config.mjs             # Cabeceras de seguridad estáticas (HSTS, COOP/CORP…)
+eslint.config.mjs           # ESLint 9 (flat) con las reglas de Next
 components/                 # Marcador, Escudo, CuentaAtras, Toast
 lib/
   prisma.ts                 # Cliente Prisma
@@ -339,19 +340,21 @@ CLAUDE.md, .claude/         # Política y configuración de los agentes de IA
 ```bash
 npm run build          # cliente de Prisma + aplicación Next.js, con los tipos
 npx tsc --noEmit       # sólo los tipos, más rápido
+npm run lint           # ESLint con las reglas de Next
 npm audit --omit=dev   # vulnerabilidades en las dependencias de producción
 ```
 
 **En cada `push` y cada pull request** se ejecuta todo eso automáticamente
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): `npm ci` —que además
-falla si el lockfile se desincroniza del `package.json`—, los tipos, el build,
-`npm audit --omit=dev --audit-level=high` y el escáner de secretos. Ninguno de
-los pasos necesita base de datos: todas las rutas son dinámicas.
+falla si el lockfile se desincroniza del `package.json`—, los tipos, el lint, el
+build, `npm audit --omit=dev --audit-level=high` y el escáner de secretos.
+Ninguno de los pasos necesita base de datos: todas las rutas son dinámicas.
 
-> **`npm run lint` no funciona todavía.** ESLint no está instalado ni
-> configurado, así que `next lint` abriría su asistente interactivo. Por eso el
-> CI no lo incluye. Para arreglarlo: `npm i -D --save-exact eslint eslint-config-next`
-> y añadir la configuración.
+> El script `lint` invoca **`eslint` directamente**, no `next lint`: este último
+> está deprecado y desaparece en Next 16. La configuración está en
+> [`eslint.config.mjs`](eslint.config.mjs), en formato *flat* (el de ESLint 9),
+> y adapta `eslint-config-next` con `FlatCompat` porque ese paquete todavía se
+> publica en el formato antiguo.
 
 **Auditoría de seguridad.** En [`scripts/security/`](scripts/security/) hay
 escáneres independientes (secretos, patrones de código, dependencias,

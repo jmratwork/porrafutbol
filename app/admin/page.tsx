@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { Toast, type ToastData } from "@/components/Toast";
 import { formatearEuros, formatearFecha } from "@/lib/format";
 import { MAX_APOSTANTES, MAX_GOLES, type EstadoActualDTO } from "@/lib/types";
@@ -148,9 +149,9 @@ export default function AdminPage() {
       <header className="mb-6 flex items-center justify-between gap-3">
         <h1 className="text-2xl font-black text-white">⚙️ Administración</h1>
         <div className="flex items-center gap-4 text-sm">
-          <a href="/" className="text-cesped-300 underline transition hover:text-cesped-200">
+          <Link href="/" className="text-cesped-300 underline transition hover:text-cesped-200">
             Ver porra
-          </a>
+          </Link>
           <button
             onClick={cerrarSesion}
             className="rounded-lg border border-white/15 px-3 py-1.5 text-slate-200 transition hover:bg-white/[0.08]"
@@ -335,9 +336,9 @@ function LoginAdmin({
       </section>
 
       <p className="mt-4 text-center text-xs text-slate-500">
-        <a href="/" className="underline transition hover:text-slate-300">
+        <Link href="/" className="underline transition hover:text-slate-300">
           Volver a la porra
-        </a>
+        </Link>
       </p>
     </main>
   );
