@@ -132,6 +132,11 @@ anti-replay de los códigos TOTP— se compartan entre instancias serverless: la
 `KV_REST_API_URL` / `KV_REST_API_TOKEN` (o sus equivalentes `UPSTASH_REDIS_REST_*`) se inyectan
 solas y la aplicación las usa automáticamente.
 
+**Si no despliegas en Vercel**, pon `TRUST_PROXY_HEADERS="1"` para que se crean las cabeceras
+`x-real-ip` / `x-forwarded-for` de tu proxy. En Vercel las fija el edge y se detecta solo; en
+cualquier otro sitio las elige el cliente, que podría ir rotándolas para saltarse el límite, así
+que sin esa variable se agrupa todo en un único contador en lugar de confiar en ellas.
+
 > **Sin KV, en serverless el freno es por instancia**: cada arranque en frío reinicia el
 > contador y las instancias no se coordinan, de modo que el tope efectivo es mayor que 10 y un
 > código TOTP podría reutilizarse en otra instancia. Si la porra es pública, conecta el KV.
@@ -252,7 +257,7 @@ responde **409**.
 | --- | --- |
 | `golesLocal`, `golesVisitante`, `resultadoLocal`, `resultadoVisitante` | entero de **0 a 20**. Como cadena, sólo dígitos: `""`, `" 5 "`, `"0x10"` y `"1e1"` se rechazan |
 | `precio` | de **0,01 €** a **10 000 €**, dos decimales como máximo (se admite la coma: `"0,50"`) |
-| `nombre`, `equipoLocal`, `equipoVisitante` | 1 a **40** caracteres (se recorta el espacio sobrante) |
+| `nombre`, `equipoLocal`, `equipoVisitante` | 1 a **40** caracteres. Se recorta el espacio sobrante y se normaliza a NFC; se rechazan los caracteres de control, los invisibles y los de **anulación bidireccional** (U+202E y compañía), con los que un nombre puede leerse al revés y suplantar visualmente al de otra persona |
 | `fechaPartido` | `YYYY-MM-DDTHH:mm` interpretado como **hora de Barcelona**, o una cadena ISO con zona |
 | `nombres` (invitaciones) | hasta **100** por petición, deduplicados |
 | apuestas por porra | **20** como máximo |

@@ -16,17 +16,34 @@ const MAX_FALLOS = 10;
 
 // --- IP del cliente -------------------------------------------------------
 
+/** Sólo dígitos, letras hex, puntos y dos puntos, y como mucho 45 caracteres. */
+function ipConFormaValida(ip: string): boolean {
+  return /^[0-9a-fA-F:.]{3,45}$/.test(ip);
+}
+
+/**
+ * ¿Se pueden creer las cabeceras de proxy? En Vercel las fija el edge y el
+ * cliente no puede falsificarlas. En cualquier otro sitio (autoalojado, Docker,
+ * un proxy que no las reescriba) las elige el cliente, que podría ir rotándolas
+ * para saltarse el límite, así que hay que declararlo a mano.
+ */
+function cabecerasDeProxyFiables(): boolean {
+  return !!process.env.VERCEL || process.env.TRUST_PROXY_HEADERS === "1";
+}
+
 export function ipDe(req: Request): string {
-  // x-real-ip lo fija el edge (en Vercel) y el cliente NO puede falsificarlo.
-  const real = req.headers.get("x-real-ip");
-  if (real) return real.trim();
+  if (!cabecerasDeProxyFiables()) return "desconocida";
+
+  const real = req.headers.get("x-real-ip")?.trim();
+  if (real && ipConFormaValida(real)) return real;
   // El PRIMER salto de x-forwarded-for es controlable por el cliente (podría
   // rotarlo para evadir el rate-limiting); usamos el ÚLTIMO, que lo añade el
   // proxy de confianza más cercano.
   const xff = req.headers.get("x-forwarded-for");
   if (xff) {
     const partes = xff.split(",").map((p) => p.trim()).filter(Boolean);
-    if (partes.length > 0) return partes[partes.length - 1]!;
+    const ultima = partes[partes.length - 1];
+    if (ultima && ipConFormaValida(ultima)) return ultima;
   }
   return "desconocida";
 }
@@ -70,6 +87,21 @@ async function kvCmd(
 }
 
 const clave = (k: string) => `rl:${k}`;
+
+/**
+ * Arma la caducidad del contador. Se llama en CADA incremento, no sólo en el
+ * primero: antes, si ese único `EXPIRE` fallaba, la clave se quedaba sin TTL y
+ * esa IP (o esa apuesta) quedaba bloqueada **para siempre**, lo que convertía un
+ * fallo del KV en una denegación de servicio permanente. `NX` hace que no se
+ * reinicie la ventana en los incrementos siguientes, así que el contador sigue
+ * caducando a los 15 minutos del primer fallo.
+ */
+async function armarCaducidad(
+  cfg: { url: string; token: string },
+  k: string,
+): Promise<void> {
+  await kvCmd(cfg, ["EXPIRE", clave(k), VENTANA_S, "NX"]);
+}
 
 // --- Respaldo en memoria --------------------------------------------------
 
@@ -122,8 +154,7 @@ export async function rateLimitConsumir(k: string): Promise<boolean> {
   if (!cfg) return memConsumir(k);
   try {
     const n = Number(await kvCmd(cfg, ["INCR", clave(k)]));
-    // Al primer intento, fijamos la caducidad de la ventana.
-    if (n === 1) await kvCmd(cfg, ["EXPIRE", clave(k), VENTANA_S]);
+    await armarCaducidad(cfg, k);
     return n <= MAX_FALLOS;
   } catch {
     // Si el KV falla, no bloqueamos por un problema de infraestructura.
@@ -183,9 +214,8 @@ export async function registrarFallo(k: string): Promise<void> {
     return;
   }
   try {
-    const n = await kvCmd(cfg, ["INCR", clave(k)]);
-    // Al primer fallo, fijamos la caducidad de la ventana.
-    if (Number(n) === 1) await kvCmd(cfg, ["EXPIRE", clave(k), VENTANA_S]);
+    await kvCmd(cfg, ["INCR", clave(k)]);
+    await armarCaducidad(cfg, k);
   } catch {
     memFallo(k);
   }

@@ -46,11 +46,20 @@ export function validarGoles(valor: unknown, etiqueta: string): ResultadoValidac
 }
 
 /**
- * Normaliza un nombre para comprobar unicidad por porra: minúsculas y espacios
- * colapsados. No distingue "Marta", "marta" ni "marta " como nombres distintos.
+ * Caracteres de control y de formato invisibles: saltos de línea, tabuladores,
+ * de anchura cero y, sobre todo, los de anulación bidireccional (U+202E y
+ * compañía), con los que se puede hacer que un nombre se lea al revés o
+ * suplante visualmente al de otra persona en la lista de apuestas.
+ */
+const INVISIBLES = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
+
+/**
+ * Normaliza un nombre para comprobar unicidad por porra: forma NFC, minúsculas
+ * y espacios colapsados. No distingue "Marta", "marta" ni "marta " como nombres
+ * distintos, ni una "é" compuesta de una precompuesta.
  */
 export function normalizarNombre(nombre: string): string {
-  return nombre.trim().toLowerCase().replace(/\s+/g, " ");
+  return nombre.normalize("NFC").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 /**
@@ -60,12 +69,15 @@ export function validarNombre(valor: unknown): ResultadoValidacion<string> {
   if (typeof valor !== "string") {
     return { ok: false, error: "El nombre es obligatorio." };
   }
-  const nombre = valor.trim();
+  const nombre = valor.normalize("NFC").trim();
   if (nombre.length < 1) {
     return { ok: false, error: "El nombre es obligatorio." };
   }
   if (nombre.length > MAX_NOMBRE) {
     return { ok: false, error: `El nombre no puede superar los ${MAX_NOMBRE} caracteres.` };
+  }
+  if (INVISIBLES.test(nombre)) {
+    return { ok: false, error: "El nombre contiene caracteres no permitidos." };
   }
   return { ok: true, data: nombre };
 }
@@ -84,14 +96,15 @@ export interface DatosPorra {
 export const MAX_PRECIO = 10000;
 
 export function validarPorra(body: Record<string, unknown>): ResultadoValidacion<DatosPorra> {
-  const equipoLocal = typeof body.equipoLocal === "string" ? body.equipoLocal.trim() : "";
+  const equipoLocal =
+    typeof body.equipoLocal === "string" ? body.equipoLocal.normalize("NFC").trim() : "";
   const equipoVisitante =
-    typeof body.equipoVisitante === "string" ? body.equipoVisitante.trim() : "";
+    typeof body.equipoVisitante === "string" ? body.equipoVisitante.normalize("NFC").trim() : "";
 
-  if (!equipoLocal || equipoLocal.length > MAX_NOMBRE) {
+  if (!equipoLocal || equipoLocal.length > MAX_NOMBRE || INVISIBLES.test(equipoLocal)) {
     return { ok: false, error: "El nombre del equipo local es obligatorio (máx. 40 caracteres)." };
   }
-  if (!equipoVisitante || equipoVisitante.length > MAX_NOMBRE) {
+  if (!equipoVisitante || equipoVisitante.length > MAX_NOMBRE || INVISIBLES.test(equipoVisitante)) {
     return {
       ok: false,
       error: "El nombre del equipo visitante es obligatorio (máx. 40 caracteres).",
