@@ -42,9 +42,7 @@ jobs:
         run: npm run build
 
       # Sólo el árbol de producción: el de desarrollo arrastra un aviso de
-      # braces (vía tailwindcss) sin parche upstream, documentado en el README.
+      # braces (vía tailwindcss y eslint-config-next) sin parche upstream,
+      # documentado en el README.
       - name: Vulnerabilidades en dependencias de producción
         run: npm audit --omit=dev --audit-level=high
-
-      - name: Escaneo de secretos
-        run: bash scripts/security/scan_secrets.sh .

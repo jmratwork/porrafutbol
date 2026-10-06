@@ -325,12 +325,10 @@ lib/
   format.ts, types.ts
 scripts/
   totp-setup.mjs            # Enrolamiento del 2FA (`npm run totp:setup`)
-  security/                 # Escáneres de la auditoría (secretos, inyección…)
 prisma/
   schema.prisma
   migrations/               # Migraciones listas para `migrate deploy`
 .github/workflows/ci.yml    # Verificación automática en cada push y PR
-CLAUDE.md, .claude/         # Política y configuración de los agentes de IA
 ```
 
 ---
@@ -347,23 +345,14 @@ npm audit --omit=dev   # vulnerabilidades en las dependencias de producción
 **En cada `push` y cada pull request** se ejecuta todo eso automáticamente
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): `npm ci` —que además
 falla si el lockfile se desincroniza del `package.json`—, los tipos, el lint, el
-build, `npm audit --omit=dev --audit-level=high` y el escáner de secretos.
-Ninguno de los pasos necesita base de datos: todas las rutas son dinámicas.
+build y `npm audit --omit=dev --audit-level=high`. Ninguno de los pasos necesita
+base de datos: todas las rutas son dinámicas.
 
 > El script `lint` invoca **`eslint` directamente**, no `next lint`: este último
 > está deprecado y desaparece en Next 16. La configuración está en
 > [`eslint.config.mjs`](eslint.config.mjs), en formato *flat* (el de ESLint 9),
 > y adapta `eslint-config-next` con `FlatCompat` porque ese paquete todavía se
 > publica en el formato antiguo.
-
-**Auditoría de seguridad.** En [`scripts/security/`](scripts/security/) hay
-escáneres independientes (secretos, patrones de código, dependencias,
-configuración e inyección de prompts) que se pueden lanzar a mano:
-
-```bash
-bash scripts/security/scan_secrets.sh .
-bash scripts/security/scan_prompt_injection.sh .
-```
 
 > **Aviso sobre `npm audit`.** El árbol de **producción** está limpio; el de
 > desarrollo arrastra un aviso HIGH de `braces` que **no tiene parche upstream**

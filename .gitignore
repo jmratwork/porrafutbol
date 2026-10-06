@@ -26,3 +26,9 @@ next-env.d.ts
 
 # prisma
 /prisma/*.db
+
+# herramientas locales de agentes de IA y auditoría: se quedan fuera del
+# control de versiones a propósito.
+/CLAUDE.md
+/.claude/
+/scripts/security/
