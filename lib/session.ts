@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { motivoSecretoDebil } from "./secretos";
+import { DEV_INSEGURO, faltaSecreto, motivoSecretoDebil } from "./secretos";
 
 /**
  * Sesión de administración mediante cookie firmada (HMAC-SHA256).
@@ -28,9 +28,7 @@ function secreto(): string {
     }
     return s;
   }
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("SESSION_SECRET es obligatorio en producción.");
-  }
+  if (!DEV_INSEGURO) throw new Error(faltaSecreto("SESSION_SECRET"));
   return "sesion-desarrollo-insegura";
 }
 

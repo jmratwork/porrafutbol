@@ -8,13 +8,12 @@ import { ipDe, limpiarFallos, pasoTotpYaUsado, rateLimitConsumir } from "@/lib/r
 export const dynamic = "force-dynamic";
 
 /**
- * POST /api/admin/login — login en DOS pasos (doble factor):
- *  - Paso 1: cuerpo { pin }. Verifica el PIN (primer factor).
- *      · PIN incorrecto → 401.
- *      · PIN correcto y hace falta 2FA → 200 { requiereCodigo: true }.
- *      · PIN correcto y NO hace falta 2FA (dev) → emite la cookie de sesión.
- *  - Paso 2: cuerpo { pin, code }. Verifica PIN + código TOTP y, si son
- *      correctos, emite la cookie de sesión (401 si el código es incorrecto).
+ * POST /api/admin/login — cuerpo { pin, code }: los DOS factores a la vez.
+ *
+ * Se evalúan ambos y se responde un único error genérico. Antes el login iba en
+ * dos pasos y respondía 200 { requiereCodigo: true } en cuanto el PIN era
+ * correcto, además de distinguir "PIN incorrecto" de "código incorrecto": eso
+ * convertía el primer factor en un oráculo y permitía atacarlos por separado.
  *
  * Limitado por IP (rate limiting) para frenar la fuerza bruta.
  */
@@ -39,21 +38,18 @@ export async function POST(req: NextRequest) {
   const code = typeof body.code === "string" ? body.code : "";
 
   try {
-    // Primer factor.
-    if (!pinCorrecto(pin)) {
-      return NextResponse.json({ error: "PIN de administración incorrecto." }, { status: 401 });
-    }
+    // Se comprueban SIEMPRE los dos factores, sin cortocircuitar en el primero,
+    // para no revelar cuál ha fallado.
+    const pinOk = pinCorrecto(pin);
+    const totp = totpRequerido() ? comprobarTotp(code) : { valido: true, paso: null };
 
-    // Segundo factor (si procede).
-    if (totpRequerido()) {
-      if (!code) {
-        // Paso 1 superado: pedimos el código de verificación.
-        return NextResponse.json({ requiereCodigo: true });
-      }
-      const totp = comprobarTotp(code);
-      if (!totp.valido || (totp.paso !== null && (await pasoTotpYaUsado(totp.paso)))) {
-        return NextResponse.json({ error: "Código de verificación incorrecto." }, { status: 401 });
-      }
+    // El paso TOTP se reserva sólo si todo lo demás cuadra: así un atacante que
+    // no sepa el PIN no puede quemar el código legítimo del organizador.
+    const reutilizado =
+      pinOk && totp.valido && totp.paso !== null ? await pasoTotpYaUsado(totp.paso) : false;
+
+    if (!pinOk || !totp.valido || reutilizado) {
+      return NextResponse.json({ error: "Credenciales incorrectas." }, { status: 401 });
     }
 
     // Éxito: emite la cookie de sesión.

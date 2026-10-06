@@ -1,5 +1,5 @@
 import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
-import { motivoSecretoDebil } from "./secretos";
+import { DEV_INSEGURO, faltaSecreto, motivoSecretoDebil } from "./secretos";
 
 /**
  * Código secreto por apuesta: permite a su dueño editarla o borrarla sin cuentas.
@@ -38,12 +38,8 @@ function secreto(): string {
     }
     return s;
   }
-  if (process.env.NODE_ENV === "production") {
-    throw new Error(
-      "APUESTA_SECRET no está configurado. Define un valor largo y aleatorio en el entorno.",
-    );
-  }
-  return "dev-only-no-usar-en-produccion";
+  if (!DEV_INSEGURO) throw new Error(faltaSecreto("APUESTA_SECRET"));
+  return "dev-only-apuesta-no-usar-en-produccion";
 }
 
 /** Normaliza un código tal y como lo escribe el usuario (mayúsculas, sin espacios). */

@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { motivoSecretoDebil } from "./secretos";
+import { DEV_INSEGURO, faltaSecreto, motivoSecretoDebil } from "./secretos";
 
 /**
  * Invitación firmada por el organizador (admin) para autorizar una apuesta con
@@ -31,12 +31,10 @@ function secreto(): string {
     }
     return s;
   }
-  if (process.env.NODE_ENV === "production") {
-    throw new Error(
-      "INVITE_SECRET no está configurado. Define un valor largo y aleatorio en el entorno.",
-    );
-  }
-  return "dev-only-no-usar-en-produccion";
+  if (!DEV_INSEGURO) throw new Error(faltaSecreto("INVITE_SECRET"));
+  // Distinto del de APUESTA_SECRET: antes compartían literal y en desarrollo no
+  // eran secretos independientes.
+  return "dev-only-invitacion-no-usar-en-produccion";
 }
 
 /**

@@ -1,5 +1,6 @@
 import { verifySync } from "otplib";
 import { AdminAuthError } from "./auth";
+import { DEV_INSEGURO } from "./secretos";
 
 /**
  * Segundo factor de autenticación: código TOTP de una app de autenticación
@@ -26,9 +27,12 @@ export function totpConfigurado(): boolean {
   return !!process.env.TOTP_SECRET;
 }
 
-/** ¿Se exige el segundo factor? Siempre en producción; en dev sólo si hay secreto. */
+/**
+ * ¿Se exige el segundo factor? Siempre, salvo que se hayan pedido expresamente
+ * los atajos de desarrollo (ALLOW_INSECURE_DEV=1) y no haya secreto.
+ */
 export function totpRequerido(): boolean {
-  return totpConfigurado() || process.env.NODE_ENV === "production";
+  return totpConfigurado() || !DEV_INSEGURO;
 }
 
 export interface ResultadoTotp {
@@ -47,11 +51,11 @@ export function comprobarTotp(code: string): ResultadoTotp {
   const secreto = process.env.TOTP_SECRET;
 
   if (!secreto) {
-    if (process.env.NODE_ENV === "production") {
+    if (!DEV_INSEGURO) {
       throw new AdminAuthError(500, "TOTP_SECRET no está configurado en el servidor.");
     }
     console.warn(
-      "[totp] TOTP_SECRET no configurado: se omite el segundo factor (sólo en desarrollo).",
+      "[totp] TOTP_SECRET no configurado y ALLOW_INSECURE_DEV=1: se omite el segundo factor.",
     );
     return { valido: true, paso: null };
   }
@@ -83,5 +87,11 @@ export function comprobarTotp(code: string): ResultadoTotp {
   // `verifySync` devuelve el tipo unión TOTP|HOTP; el `timeStep` (paso de tiempo,
   // para el anti-replay) sólo está en la variante TOTP, que es la que usamos.
   const paso = "timeStep" in resultado ? resultado.timeStep : null;
+  // Sin paso no hay anti-replay, y `paso: null` ya significa "2FA omitido en
+  // desarrollo": si llega aquí con un secreto de verdad, es que la librería ha
+  // cambiado de forma. Mejor fallar que aceptar un código reutilizable.
+  if (paso === null) {
+    throw new AdminAuthError(500, "La verificación TOTP no devolvió el paso de tiempo.");
+  }
   return { valido: true, paso };
 }

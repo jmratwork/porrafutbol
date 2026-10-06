@@ -11,6 +11,21 @@
  * siguen usando sus valores de relleno.
  */
 
+/**
+ * ¿Se permiten los atajos de desarrollo (secretos de relleno públicos y 2FA
+ * omitido)? Hace falta pedirlo a mano con ALLOW_INSECURE_DEV=1. Antes bastaba
+ * con que NODE_ENV no fuera "production", de modo que un despliegue de staging o
+ * autoalojado con NODE_ENV mal puesto arrancaba con una clave de sesión pública
+ * —y por tanto con la cookie de admin falsificable— y sin segundo factor.
+ */
+export const DEV_INSEGURO =
+  process.env.NODE_ENV !== "production" && process.env.ALLOW_INSECURE_DEV === "1";
+
+/** Mensaje común cuando falta un secreto y no se permiten los atajos. */
+export function faltaSecreto(nombre: string): string {
+  return `${nombre} no está configurado. Defínelo, o usa ALLOW_INSECURE_DEV=1 en desarrollo.`;
+}
+
 /** Valores de ejemplo y de relleno que nunca deben llegar a producción. */
 const EJEMPLO = /cambia-esto|changeme|change-me|placeholder|ejemplo|example|dev-only|desarrollo|insegur|todo|xxxx/i;
 

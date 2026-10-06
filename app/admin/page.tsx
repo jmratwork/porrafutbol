@@ -191,14 +191,13 @@ function LoginAdmin({
   avisoInicial: string | null;
   onAutenticado: () => void;
 }) {
-  const [fase, setFase] = useState<"pin" | "codigo">("pin");
   const [pin, setPin] = useState("");
   const [code, setCode] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(avisoInicial);
 
-  // Último código auto-enviado: evita reintentar el mismo en bucle tras un error.
-  const codigoAutoenviado = useRef("");
+  // Último intento auto-enviado: evita reintentarlo en bucle tras un error.
+  const autoenviado = useRef("");
 
   const procesarLogin = async () => {
     setError(null);
@@ -207,13 +206,9 @@ function LoginAdmin({
       const res = await fetch("/api/admin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(fase === "pin" ? { pin } : { pin, code }),
+        body: JSON.stringify({ pin, code }),
       });
       const data = await res.json();
-      if (res.ok && data.requiereCodigo) {
-        setFase("codigo");
-        return;
-      }
       if (res.ok && data.autenticado) {
         onAutenticado();
         return;
@@ -231,21 +226,22 @@ function LoginAdmin({
     void procesarLogin();
   };
 
-  // Al completar los 6 dígitos, comprueba el código automáticamente (sin tener que
-  // pulsar "Verificar").
+  // Con el PIN puesto, al completar los 6 dígitos se envía automáticamente.
   useEffect(() => {
+    const intento = `${pin}:${code}`;
     if (
-      fase === "codigo" &&
+      totpRequerido &&
+      pin.length > 0 &&
       code.length === 6 &&
       !enviando &&
-      codigoAutoenviado.current !== code
+      autoenviado.current !== intento
     ) {
-      codigoAutoenviado.current = code;
+      autoenviado.current = intento;
       void procesarLogin();
     }
     // procesarLogin usa el estado actual del render; no hace falta en deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fase, code, enviando]);
+  }, [totpRequerido, pin, code, enviando]);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-10">
@@ -264,28 +260,25 @@ function LoginAdmin({
         )}
 
         <form onSubmit={enviar} className="flex flex-col gap-4" noValidate>
-          {fase === "pin" ? (
+          <div>
+            <label htmlFor="pin" className="label">
+              PIN de administración
+            </label>
+            <input
+              id="pin"
+              type="password"
+              required
+              value={pin}
+              onChange={(e) => setPin(e.target.value)}
+              placeholder="Introduce el PIN"
+              autoComplete="current-password"
+              autoFocus
+              className="input"
+            />
+          </div>
+
+          {totpRequerido && (
             <div>
-              <label htmlFor="pin" className="label">
-                PIN de administración
-              </label>
-              <input
-                id="pin"
-                type="password"
-                required
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                placeholder="Introduce el PIN"
-                autoComplete="current-password"
-                autoFocus
-                className="input"
-              />
-            </div>
-          ) : (
-            <div>
-              <p className="mb-3 text-sm text-slate-300">
-                Introduce el código de 6 dígitos de tu app de autenticación.
-              </p>
               <label htmlFor="code" className="label">
                 Código de verificación
               </label>
@@ -300,38 +293,17 @@ function LoginAdmin({
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
                 placeholder="123456"
-                autoFocus
                 className="input text-center font-mono text-xl tracking-[0.4em]"
               />
+              <p className="mt-2 text-xs text-slate-400">
+                Los 6 dígitos de tu app de autenticación. Se comprueba solo al completarlo.
+              </p>
             </div>
           )}
 
           <button type="submit" disabled={enviando} className="btn-primary w-full">
-            {enviando
-              ? fase === "pin"
-                ? "Comprobando…"
-                : "Verificando…"
-              : fase === "pin"
-                ? totpRequerido
-                  ? "Continuar"
-                  : "Entrar"
-                : "Verificar"}
+            {enviando ? "Comprobando…" : "Entrar"}
           </button>
-
-          {fase === "codigo" && (
-            <button
-              type="button"
-              onClick={() => {
-                setFase("pin");
-                setCode("");
-                setError(null);
-                codigoAutoenviado.current = "";
-              }}
-              className="text-center text-xs text-slate-400 underline transition hover:text-slate-200"
-            >
-              Volver
-            </button>
-          )}
         </form>
       </section>
 

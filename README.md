@@ -74,8 +74,8 @@ copiar el fichero y olvidar una línea bloquea el arranque en vez de dejar una c
 - **`SESSION_SECRET`**: firma la cookie de sesión del admin. **Obligatorio en producción**
   y con **al menos 32 caracteres** (una clave HMAC corta sería forzable offline).
 - **`TOTP_SECRET`**: **segundo factor** (2FA) del admin, secreto TOTP en base32 de
-  **128 bits como mínimo**. Genéralo con `npm run totp:setup`. **Obligatorio en producción**;
-  si se deja vacío en desarrollo, se omite el 2FA (sólo se pide el PIN).
+  **128 bits como mínimo**. Genéralo con `npm run totp:setup`. **Obligatorio**, salvo que
+  pidas los atajos de desarrollo (ver más abajo).
 - **`APUESTA_SECRET`**: secreto para los códigos de cada apuesta. **Obligatorio en producción**
   y de **al menos 32 caracteres** (si falta, el servidor aborta en vez de usar un valor por
   defecto público).
@@ -111,6 +111,13 @@ alguno falla, el servidor aborta con un mensaje que dice cuál y por qué. La l�
 
 Pega cada valor tanto en el `.env` local como en las variables de entorno de Vercel.
 
+**Atajos de desarrollo (`ALLOW_INSECURE_DEV`).** Si quieres arrancar en local sin generar
+los secretos, pon `ALLOW_INSECURE_DEV="1"`: el servidor usará valores de relleno **públicos**
+y omitirá el 2FA. Sin esa variable, falta un secreto y el arranque falla, que es lo que debe
+pasar. **Nunca la pongas en producción ni en staging**: con ella la cookie de administración
+es falsificable por cualquiera. Antes este atajo se activaba solo con que `NODE_ENV` no fuera
+`production`, de modo que un despliegue mal configurado quedaba abierto sin avisar.
+
 **Rate-limiting (recomendado en producción).** El freno anti-fuerza-bruta funciona sin
 configurar nada, con un contador **en memoria por instancia** (10 fallos cada 15 min). Para el
 login y para los códigos de apuesta se cuenta **por IP** (agrupando IPv6 por su `/64`, para que
@@ -134,9 +141,13 @@ solas y la aplicación las usa automáticamente.
 El acceso a `/admin` está protegido con **dos factores**:
 
 1. **PIN** (`ADMIN_PIN`) — algo que sabes.
-2. **Código TOTP** de tu app de autenticación (`TOTP_SECRET`) — algo que tienes. Al teclear el
-   sexto dígito se verifica **solo**, sin pulsar nada (el botón *Verificar* sigue ahí como
-   respaldo).
+2. **Código TOTP** de tu app de autenticación (`TOTP_SECRET`) — algo que tienes.
+
+Los dos se piden **en la misma pantalla** y se envían juntos; al teclear el sexto dígito del
+código se envía **solo**, sin pulsar nada (el botón sigue ahí como respaldo). Si algo falla,
+la respuesta es un único *Credenciales incorrectas*: no se distingue qué factor ha fallado.
+Antes el login iba en dos pasos y confirmaba el PIN antes de pedir el código, lo que permitía
+atacar los factores por separado.
 
 Superados ambos, el servidor emite una **cookie de sesión firmada** (`httpOnly`, `Secure`,
 `SameSite=Strict`, **60 min**). A partir de ahí, las acciones del panel se autorizan con esa
@@ -165,7 +176,9 @@ npx prisma migrate deploy # aplica las migraciones incluidas a la base de datos
 npm run dev
 ```
 
-Abre [http://localhost:3000](http://localhost:3000). Ve a `/admin`, introduce el PIN y crea la porra.
+Abre [http://localhost:3000](http://localhost:3000). Ve a `/admin` e inicia sesión con el PIN y
+el código de tu app de autenticación; después crea la porra. Si has puesto
+`ALLOW_INSECURE_DEV="1"` y no tienes `TOTP_SECRET`, basta con el PIN.
 
 ---
 
@@ -217,7 +230,7 @@ Cualquiera de estas opciones funciona; copia su cadena de conexión en `DATABASE
 
 | Método | Ruta            | Descripción                                            | Auth |
 | ------ | --------------- | ------------------------------------------------------ | ---- |
-| POST   | `/api/admin/login`   | Login del admin (PIN + código TOTP → cookie de sesión). | —    |
+| POST   | `/api/admin/login`   | Login del admin: `{ pin, code }` en una sola petición → cookie de sesión. **401** genérico si falla cualquiera de los dos. | —    |
 | POST   | `/api/admin/logout`  | Cierra la sesión (borra la cookie).                | Sesión |
 | GET    | `/api/admin/session` | Estado de la sesión para la pantalla de login.     | —    |
 | GET    | `/api/porra`    | Estado actual: porra + apuestas + bote + ganadores.    | No   |
@@ -331,7 +344,7 @@ lib/
   auth.ts                   # Comprobación del PIN y de la sesión de admin
   session.ts                # Cookie de sesión firmada (HMAC, 60 min)
   totp.ts                   # Segundo factor: verificación del código TOTP
-  secretos.ts               # Calidad de los secretos exigida en producción
+  secretos.ts               # Calidad de los secretos y atajos de desarrollo
   invitacion.ts             # Firma/verificación de invitaciones (HMAC)
   codigo.ts                 # Código secreto por apuesta (HMAC)
   rateLimit.ts              # Freno anti-fuerza-bruta (por IP y por apuesta) y anti-replay TOTP
