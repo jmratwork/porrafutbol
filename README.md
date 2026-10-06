@@ -220,7 +220,7 @@ Cualquiera de estas opciones funciona; copia su cadena de conexión en `DATABASE
 | GET    | `/api/porra`    | Estado actual: porra + apuestas + bote + ganadores.    | No   |
 | POST   | `/api/porra`    | Crear la porra (equipos, fecha/hora, precio); **409** si ya existe una (también si dos peticiones intentan crearla a la vez). | Sesión |
 | PATCH  | `/api/porra`    | `accion`: `CERRAR` \| `FINALIZAR` (`ABRIR` ya no reabre; **409**). | Sesión |
-| DELETE | `/api/porra`    | Reiniciar (borra porra y apuestas).                    | Sesión |
+| DELETE | `/api/porra`    | Reiniciar (borra porra y apuestas). Si el cuerpo trae la porra siguiente, se **valida antes** de borrar nada y ambas operaciones van en una transacción. | Sesión |
 | POST   | `/api/invitaciones` | Generar enlaces de invitación (`{ nombres: string[] }`); **409** si la porra está cerrada, empezada o llena. | Sesión |
 | POST   | `/api/apuestas` | Crear una apuesta (requiere **invitación** + marcador). Devuelve un código secreto; **409** si está completa, cerrada, el nombre ya existe o dos envíos chocaron. | Invitación |
 | PATCH  | `/api/apuestas/:id` | Editar el marcador de una apuesta (requiere su código); **429** al agotar los intentos. | Código |
@@ -324,20 +324,49 @@ lib/
   format.ts, types.ts
 scripts/
   totp-setup.mjs            # Enrolamiento del 2FA (`npm run totp:setup`)
+  security/                 # Escáneres de la auditoría (secretos, inyección…)
 prisma/
   schema.prisma
   migrations/               # Migraciones listas para `migrate deploy`
+.github/workflows/ci.yml    # Verificación automática en cada push y PR
+CLAUDE.md, .claude/         # Política y configuración de los agentes de IA
 ```
 
 ---
 
-## Verificar el build
+## Verificar
 
 ```bash
-npm run build
+npm run build          # cliente de Prisma + aplicación Next.js, con los tipos
+npx tsc --noEmit       # sólo los tipos, más rápido
+npm audit --omit=dev   # vulnerabilidades en las dependencias de producción
 ```
 
-Compila el cliente de Prisma y la aplicación Next.js sin errores de tipos.
+**En cada `push` y cada pull request** se ejecuta todo eso automáticamente
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): `npm ci` —que además
+falla si el lockfile se desincroniza del `package.json`—, los tipos, el build,
+`npm audit --omit=dev --audit-level=high` y el escáner de secretos. Ninguno de
+los pasos necesita base de datos: todas las rutas son dinámicas.
+
+> **`npm run lint` no funciona todavía.** ESLint no está instalado ni
+> configurado, así que `next lint` abriría su asistente interactivo. Por eso el
+> CI no lo incluye. Para arreglarlo: `npm i -D --save-exact eslint eslint-config-next`
+> y añadir la configuración.
+
+**Auditoría de seguridad.** En [`scripts/security/`](scripts/security/) hay
+escáneres independientes (secretos, patrones de código, dependencias,
+configuración e inyección de prompts) que se pueden lanzar a mano:
+
+```bash
+bash scripts/security/scan_secrets.sh .
+bash scripts/security/scan_prompt_injection.sh .
+```
+
+> **Aviso sobre `npm audit`.** El árbol de **producción** está limpio, pero el de
+> desarrollo arrastra un aviso HIGH de `braces` (a través de `tailwindcss`) que
+> **no tiene parche upstream**: la única salida sería migrar a Tailwind 4. La
+> exposición es mínima —la única entrada es tu propio `tailwind.config.ts`— así
+> que se acepta de forma consciente, y por eso el CI comprueba `--omit=dev`.
 
 ## Nota
 
