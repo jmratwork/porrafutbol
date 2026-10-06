@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { admiteApuestas, obtenerEstadoActual } from "@/lib/estado";
-import { validarGoles } from "@/lib/validation";
+import { cuerpoComoObjeto, validarGoles } from "@/lib/validation";
 import { compararCodigo } from "@/lib/codigo";
 import { tieneSesionAdmin } from "@/lib/auth";
 import {
@@ -57,7 +57,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   let body: Record<string, unknown>;
   try {
-    body = await req.json();
+    body = cuerpoComoObjeto(await req.json());
   } catch {
     return NextResponse.json({ error: "Cuerpo de la petición no válido." }, { status: 400 });
   }
@@ -125,7 +125,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   let body: Record<string, unknown> = {};
   try {
     const text = await req.text();
-    if (text) body = JSON.parse(text);
+    if (text) body = cuerpoComoObjeto(JSON.parse(text));
   } catch {
     return NextResponse.json({ error: "Cuerpo de la petición no válido." }, { status: 400 });
   }

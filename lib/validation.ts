@@ -8,6 +8,20 @@ export interface ResultadoValidacion<T> {
 }
 
 /**
+ * Normaliza el cuerpo JSON de una petición a un objeto.
+ *
+ * `null`, `123` o `[]` son JSON perfectamente válidos, así que `req.json()`
+ * puede devolverlos: leer `body.pin` sobre ellos lanza un TypeError que, al no
+ * estar dentro de ningún try, se convertía en un 500 sin autenticar.
+ */
+export function cuerpoComoObjeto(valor: unknown): Record<string, unknown> {
+  if (valor && typeof valor === "object" && !Array.isArray(valor)) {
+    return valor as Record<string, unknown>;
+  }
+  return {};
+}
+
+/**
  * Valida que un valor sea un entero dentro de [MIN_GOLES, MAX_GOLES].
  */
 export function validarGoles(valor: unknown, etiqueta: string): ResultadoValidacion<number> {

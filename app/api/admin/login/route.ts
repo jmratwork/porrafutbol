@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { AdminAuthError, pinCorrecto } from "@/lib/auth";
+import { cuerpoComoObjeto } from "@/lib/validation";
 import { comprobarTotp, totpRequerido } from "@/lib/totp";
 import { crearTokenSesion, COOKIE_SESION, TTL_SESION_MS } from "@/lib/session";
 import { ipDe, limpiarFallos, pasoTotpYaUsado, rateLimitConsumir } from "@/lib/rateLimit";
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
 
   let body: Record<string, unknown>;
   try {
-    body = await req.json();
+    body = cuerpoComoObjeto(await req.json());
   } catch {
     body = {};
   }

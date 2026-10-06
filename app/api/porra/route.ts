@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { obtenerEstadoActual, obtenerPorraActiva } from "@/lib/estado";
-import { validarGoles, validarPorra } from "@/lib/validation";
+import { cuerpoComoObjeto, validarGoles, validarPorra } from "@/lib/validation";
 import { tieneSesionAdmin } from "@/lib/auth";
 
 // Esta API depende de la base de datos: nunca debe cachearse.
@@ -39,7 +39,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   let body: Record<string, unknown>;
   try {
-    body = await req.json();
+    body = cuerpoComoObjeto(await req.json());
   } catch {
     return NextResponse.json({ error: "Cuerpo de la petición no válido." }, { status: 400 });
   }
@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   let body: Record<string, unknown>;
   try {
-    body = await req.json();
+    body = cuerpoComoObjeto(await req.json());
   } catch {
     return NextResponse.json({ error: "Cuerpo de la petición no válido." }, { status: 400 });
   }
@@ -195,7 +195,7 @@ export async function DELETE(req: NextRequest) {
   try {
     // El cuerpo es opcional en DELETE.
     const text = await req.text();
-    if (text) body = JSON.parse(text);
+    if (text) body = cuerpoComoObjeto(JSON.parse(text));
   } catch {
     return NextResponse.json({ error: "Cuerpo de la petición no válido." }, { status: 400 });
   }
@@ -207,32 +207,53 @@ export async function DELETE(req: NextRequest) {
     );
   }
 
-  try {
-    // Borra todas las porras (y sus apuestas en cascada).
-    await prisma.porra.deleteMany({});
-
-    // Si vienen datos válidos, crea inmediatamente una porra nueva.
-    const tieneCampos =
-      body.equipoLocal || body.equipoVisitante || body.fechaPartido || body.precio;
-    if (tieneCampos) {
-      const validacion = validarPorra(body);
-      if (!validacion.ok || !validacion.data) {
-        return NextResponse.json({ error: validacion.error }, { status: 400 });
-      }
-      await prisma.porra.create({
-        data: {
-          equipoLocal: validacion.data.equipoLocal,
-          equipoVisitante: validacion.data.equipoVisitante,
-          fechaPartido: validacion.data.fechaPartido,
-          precio: validacion.data.precio,
-          estado: "ABIERTA",
-        },
-      });
+  // Si el reinicio trae los datos de la porra siguiente, se validan ANTES de
+  // borrar nada: antes se hacía al revés, de modo que un error al teclear la
+  // fecha o el precio se llevaba la porra y las 20 apuestas por delante y sólo
+  // después devolvía un 400.
+  const tieneCampos =
+    body.equipoLocal || body.equipoVisitante || body.fechaPartido || body.precio;
+  let datos = null;
+  if (tieneCampos) {
+    const validacion = validarPorra(body);
+    if (!validacion.ok || !validacion.data) {
+      return NextResponse.json({ error: validacion.error }, { status: 400 });
     }
+    datos = validacion.data;
+  }
+
+  try {
+    // Borrado y creación en una sola transacción: si la creación falla, el
+    // borrado no se queda aplicado a medias. SERIALIZABLE para que dos
+    // reinicios simultáneos no puedan dejar dos porras activas.
+    await prisma.$transaction(
+      async (tx) => {
+        // Borra todas las porras (y sus apuestas en cascada).
+        await tx.porra.deleteMany({});
+        if (datos) {
+          await tx.porra.create({
+            data: {
+              equipoLocal: datos.equipoLocal,
+              equipoVisitante: datos.equipoVisitante,
+              fechaPartido: datos.fechaPartido,
+              precio: datos.precio,
+              estado: "ABIERTA",
+            },
+          });
+        }
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
 
     const estado = await obtenerEstadoActual();
     return NextResponse.json(estado);
   } catch (e) {
+    if (esConflictoConcurrencia(e)) {
+      return NextResponse.json(
+        { error: "Otro reinicio llegó a la vez. Vuelve a intentarlo." },
+        { status: 409 },
+      );
+    }
     console.error("DELETE /api/porra", e);
     return NextResponse.json({ error: "No se pudo reiniciar la porra." }, { status: 500 });
   }

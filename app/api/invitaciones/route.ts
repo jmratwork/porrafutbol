@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { admiteApuestas, obtenerPorraActiva } from "@/lib/estado";
-import { normalizarNombre, validarNombre } from "@/lib/validation";
+import { cuerpoComoObjeto, normalizarNombre, validarNombre } from "@/lib/validation";
 import { tieneSesionAdmin } from "@/lib/auth";
 import { firmarInvitacion } from "@/lib/invitacion";
 import { MAX_APOSTANTES } from "@/lib/types";
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 
   let body: Record<string, unknown>;
   try {
-    body = await req.json();
+    body = cuerpoComoObjeto(await req.json());
   } catch {
     return NextResponse.json({ error: "Cuerpo de la petición no válido." }, { status: 400 });
   }

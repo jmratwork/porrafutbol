@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { obtenerEstadoActual, obtenerPorraActiva } from "@/lib/estado";
-import { normalizarNombre, validarGoles, validarNombre } from "@/lib/validation";
+import {
+  cuerpoComoObjeto,
+  normalizarNombre,
+  validarGoles,
+  validarNombre,
+} from "@/lib/validation";
 import { generarCodigo, hashCodigo } from "@/lib/codigo";
 import { invitacionValida } from "@/lib/invitacion";
 import { ipDe, limpiarFallos, rateLimitOk, registrarFallo } from "@/lib/rateLimit";
@@ -19,7 +24,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   let body: Record<string, unknown>;
   try {
-    body = await req.json();
+    body = cuerpoComoObjeto(await req.json());
   } catch {
     return NextResponse.json({ error: "Cuerpo de la petición no válido." }, { status: 400 });
   }
