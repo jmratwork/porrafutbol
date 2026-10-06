@@ -24,7 +24,7 @@ then performs deeper manual review.
 2. Sort by severity: CRITICAL → HIGH → MEDIUM → LOW → INFO
 3. Calculate risk score: CRITICAL×25 + HIGH×10 + MEDIUM×3 + LOW×1 (cap 100)
 4. Present executive summary, then detailed findings with remediation
-5. Offer to auto-fix CRITICAL/HIGH findings and install security hooks
+5. Offer to auto-fix CRITICAL/HIGH findings and to tighten `.claude/settings.json`
 
 ## Security Policy
 

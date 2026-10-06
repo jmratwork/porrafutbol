@@ -20,7 +20,44 @@ CYAN='\033[0;36m'
 MAGENTA='\033[0;35m'
 NC='\033[0m'
 
-EXCLUDE="--exclude-dir=.git --exclude-dir=node_modules --exclude-dir=vendor --exclude-dir=__pycache__ --exclude-dir=.venv --exclude-dir=venv --exclude-dir=dist --exclude-dir=build --exclude-dir=target"
+# .next se excluye además de los habituales: es salida de build (miles de
+# ficheros minificados) y era una de las causas de que el escaneo tardara
+# minutos.
+# ARRAY, no cadena: la línea 11 fija IFS=$'\n\t', es decir, sin espacio. Una
+# cadena "--exclude-dir=a --exclude-dir=b" expandida sin comillas NO se parte en
+# palabras, así que grep recibía las diez exclusiones como UN único argumento y
+# las tomaba por una sola exclusión sin sentido. Resultado: recorría
+# node_modules y .next completos —de ahí los seis minutos de escaneo y las
+# decenas de CRITICAL falsos— sin excluir nada en realidad.
+EXCLUDE=(
+    --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=vendor
+    --exclude-dir=__pycache__ --exclude-dir=.venv --exclude-dir=venv
+    --exclude-dir=dist --exclude-dir=build --exclude-dir=target
+    --exclude-dir=.next
+)
+
+# Filtro de rutas aplicado A LA SALIDA de los greps recursivos, además de
+# --exclude-dir. No es redundancia por gusto: en este repositorio los greps de
+# las secciones 2, 5 y 6 seguían devolviendo ficheros de .next con la exclusión
+# puesta (verificado: la misma orden, con las mismas banderas y el mismo patrón,
+# fuera del script sí los excluye). Hasta entender el motivo, el filtro de
+# salida garantiza que la salida de build no contamine el informe: .next está
+# lleno de código minificado donde "userAgent … fetch" casa con los patrones de
+# directivas y producía decenas de CRITICAL falsos.
+RUTAS_IGNORADAS='/(\.next|node_modules|\.git|dist|build|target|vendor)/'
+
+# Coincidencias conocidas y benignas, suprimidas por contenido. "skipLibCheck"
+# (tsconfig.json) casa con el patrón skip.*check sin tener nada que ver con
+# saltarse una comprobación de seguridad.
+BENIGNAS='skipLibCheck|skipDefaultLibCheck'
+
+# Este propio fichero se descarta por ruta en la salida: su lista de patrones
+# ("ignore previous instruction", "skip security checks"…) casa consigo misma por
+# construcción, y --exclude no basta cuando la raíz del escaneo es ".".
+# Contrapartida asumida: una directiva escondida DENTRO de este script no la
+# detectaría la sección 2. Queda cubierta por la revisión manual del utillaje y
+# por la sección 3, que comprueba la integridad de la configuración de agentes.
+AUTOREFERENCIA='scripts/security/scan_prompt_injection\.sh'
 
 finding() {
     local severity="$1" category="$2" file="$3" detail="$4"
@@ -48,28 +85,36 @@ BIDI_PATTERN='[\x{200E}\x{200F}\x{202A}-\x{202E}\x{2066}-\x{2069}]'
 
 while IFS= read -r file; do
     [ -z "$file" ] && continue
-    # Check for zero-width characters
-    if perl -ne "exit 1 if /$ZWSP_PATTERN/" "$file" 2>/dev/null; then
-        : # no match
-    else
-        linenum=$(perl -ne "print \"\$.\n\" if /$ZWSP_PATTERN/" "$file" 2>/dev/null | head -1)
-        finding "CRITICAL" "Invisible Chars" "$file" "Zero-width characters detected at line $linenum — may hide instructions from human review"
+    # UNA sola invocación de perl por fichero. Antes eran de dos a cuatro, y
+    # arrancar procesos es lo que dominaba el coste: con la salida de build sin
+    # excluir, el escaneo de este repositorio tardaba casi cinco minutos.
+    marcas=$(perl -ne "print \"ZWSP:\$.\n\" if /$ZWSP_PATTERN/; print \"BIDI:\$.\n\" if /$BIDI_PATTERN/" "$file" 2>/dev/null)
+    if [ -n "$marcas" ]; then
+        zwsp=${marcas#*ZWSP:}
+        case "$marcas" in
+            *ZWSP:*)
+                finding "CRITICAL" "Invisible Chars" "$file" "Zero-width characters detected at line ${zwsp%%$'\n'*} — may hide instructions from human review"
+                ;;
+        esac
+        bidi=${marcas#*BIDI:}
+        case "$marcas" in
+            *BIDI:*)
+                finding "CRITICAL" "Bidi Override" "$file" "Bidirectional control characters at line ${bidi%%$'\n'*} — Trojan Source attack vector"
+                ;;
+        esac
     fi
-    # Check for bidirectional override characters (Trojan Source attack)
-    if perl -ne "exit 1 if /$BIDI_PATTERN/" "$file" 2>/dev/null; then
-        : # no match
-    else
-        linenum=$(perl -ne "print \"\$.\n\" if /$BIDI_PATTERN/" "$file" 2>/dev/null | head -1)
-        finding "CRITICAL" "Bidi Override" "$file" "Bidirectional control characters at line $linenum — Trojan Source attack vector"
-    fi
-done < <(find "$PROJECT_ROOT" \( -name "*.js" -o -name "*.ts" -o -name "*.py" -o -name "*.rb" \
+# Se PODAN los directorios en vez de filtrarlos con -not -path: así find no
+# desciende en ellos. Se añade .next (salida de build: miles de ficheros
+# minificados), que era la causa principal de la lentitud.
+done < <(find "$PROJECT_ROOT" \
+    \( -name .git -o -name node_modules -o -name vendor -o -name dist \
+       -o -name build -o -name target -o -name .next -o -name __pycache__ \) -prune -o \
+    -type f \( -name "*.js" -o -name "*.ts" -o -name "*.py" -o -name "*.rb" \
     -o -name "*.go" -o -name "*.java" -o -name "*.rs" -o -name "*.md" -o -name "*.txt" \
     -o -name "*.yaml" -o -name "*.yml" -o -name "*.json" -o -name "*.toml" -o -name "*.sh" \
     -o -name "*.jsx" -o -name "*.tsx" -o -name "*.html" -o -name "*.svg" -o -name "*.xml" \
     -o -name "*.css" -o -name "*.php" -o -name "*.cs" \) \
-    -not -path "*/.git/*" -not -path "*/node_modules/*" -not -path "*/vendor/*" \
-    -not -path "*/dist/*" -not -path "*/build/*" -not -path "*/target/*" \
-    -size -1M 2>/dev/null)
+    -size -1M -print 2>/dev/null)
 
 # ═══════════════════════════════════════════════
 # 2. AGENT-TARGETED INSTRUCTIONS IN COMMENTS/TEXT
@@ -92,30 +137,56 @@ AI_DIRECTIVE_PATTERNS=(
     'skip.*(?:security|validation|check|auth|verification)'
     'disable.*(?:security|validation|check|auth|logging)'
     'do not.*(?:log|report|alert|notify|check)'
-    '(?:AI|assistant|agent|model|Claude|GPT|LLM).*(?:execute|run|download|fetch|curl|send)'
-    'IMPORTANT.*(?:AI|assistant|agent|model).*(?:ignore|override|skip|bypass)'
+    # Límites de palabra OBLIGATORIOS en los identificadores: la búsqueda es
+    # case-insensitive, así que un "AI" suelto casaba con el "ai" de "await" y
+    # convertía cada `await fetch(...)` del proyecto en un CRITICAL. Lo mismo con
+    # "container runs" o "mail...send".
+    '\b(?:AI|assistant|agent|model|Claude|GPT|LLM)\b.*\b(?:execute|run|download|fetch|curl|send)\b'
+    'IMPORTANT.*\b(?:AI|assistant|agent|model)\b.*\b(?:ignore|override|skip|bypass)\b'
     '(?:hidden|secret).*instruction'
 )
 
 COMBINED_PATTERN=$(IFS='|'; echo "${AI_DIRECTIVE_PATTERNS[*]}")
 
-results=$(grep -rniP "$COMBINED_PATTERN" "$PROJECT_ROOT" \
-    $EXCLUDE \
+# Se excluye .claude/ SÓLO en esta búsqueda: los ficheros que definen a los
+# agentes y a la skill describen los ataques que deben detectar ("ignore
+# previous instruction", "skip security checks", "Claude Code executes
+# commands"…), así que casaban con estos mismos patrones y producían una docena
+# de CRITICAL falsos — suficiente para enterrar cualquier hallazgo real en la
+# puntuación de riesgo. La integridad de .claude/ se comprueba en la sección 3,
+# que es la específica para ello.
+# Se excluye también este propio fichero: su lista de patrones ("ignore previous
+# instruction", "skip security checks"…) casa consigo misma por construcción y
+# generaba una treintena de CRITICAL falsos. Los demás scripts de
+# scripts/security/ sí se escanean.
+# IMPORTANTE: todas las opciones van ANTES del directorio y el patrón va con
+# -e. Tal como estaba (ruta primero, opciones después), grep ignoraba los
+# --include y --exclude* al ejecutarse desde este script: recorría node_modules
+# y .next enteros, lo que explicaba a la vez las decenas de CRITICAL falsos y
+# los casi seis minutos de escaneo.
+results=$(grep -rniP \
+    "${EXCLUDE[@]}" --exclude-dir=.claude --exclude=scan_prompt_injection.sh \
     --include="*.md" --include="*.txt" --include="*.rst" \
     --include="*.js" --include="*.ts" --include="*.py" --include="*.rb" \
     --include="*.go" --include="*.java" --include="*.rs" --include="*.yaml" \
     --include="*.yml" --include="*.json" --include="*.toml" --include="*.html" \
     --include="*.svg" --include="*.xml" --include="*.sh" --include="*.css" \
     --include="*.jsx" --include="*.tsx" --include="*.php" \
-    2>/dev/null | head -50 || true)
+    -e "$COMBINED_PATTERN" "$PROJECT_ROOT" \
+    2>/dev/null | grep -Ev "$RUTAS_IGNORADAS" | grep -Ev "$BENIGNAS" \
+    | grep -Ev "$AUTOREFERENCIA" | head -50 || true)
 
 if [ -n "$results" ]; then
-    echo "$results" | while IFS= read -r line; do
+    # Here-string en vez de tubería: `echo ... | while` ejecuta el bucle en un
+    # SUBSHELL, así que los incrementos de FINDING_COUNT se perdían y el script
+    # imprimía hallazgos CRITICAL para terminar diciendo "No prompt injection
+    # indicators detected".
+    while IFS= read -r line; do
         file=$(echo "$line" | cut -d: -f1)
         linenum=$(echo "$line" | cut -d: -f2)
         content=$(echo "$line" | cut -d: -f3- | head -c 120)
         finding "CRITICAL" "Agent Directive" "$file:$linenum" "$content"
-    done
+    done <<< "$results"
 else
     echo -e "  ${GREEN}✓${NC} No direct agent-targeted instructions found"
 fi
@@ -192,36 +263,44 @@ fi
 echo -e "\n${CYAN}── [4/7] Encoded Payloads in Comments ──${NC}"
 
 # Look for suspiciously long base64 strings in comments
-results=$(grep -rnP '(?://|#|/\*|\*|<!--)\s*.*(?:[A-Za-z0-9+/]{4}){15,}={0,2}' "$PROJECT_ROOT" \
-    $EXCLUDE \
+results=$(grep -rnP "${EXCLUDE[@]}" \
     --include="*.js" --include="*.ts" --include="*.py" --include="*.rb" \
     --include="*.go" --include="*.java" --include="*.rs" --include="*.sh" \
     --include="*.html" --include="*.xml" --include="*.yaml" --include="*.yml" \
-    2>/dev/null | head -20 || true)
+    -e '(?://|#|/\*|\*|<!--)\s*.*(?:[A-Za-z0-9+/]{4}){15,}={0,2}' "$PROJECT_ROOT" \
+    2>/dev/null | grep -Ev "$RUTAS_IGNORADAS" | head -20 || true)
 
 if [ -n "$results" ]; then
-    echo "$results" | while IFS= read -r line; do
+    # Here-string en vez de tubería: `echo ... | while` ejecuta el bucle en un
+    # SUBSHELL, así que los incrementos de FINDING_COUNT se perdían y el script
+    # imprimía hallazgos CRITICAL para terminar diciendo "No prompt injection
+    # indicators detected".
+    while IFS= read -r line; do
         file=$(echo "$line" | cut -d: -f1)
         linenum=$(echo "$line" | cut -d: -f2)
         finding "HIGH" "Encoded Payload" "$file:$linenum" "Suspicious base64 block in comment — decode and verify"
-    done
+    done <<< "$results"
 else
     echo -e "  ${GREEN}✓${NC} No suspicious encoded payloads in comments"
 fi
 
 # Hex-encoded strings in comments
-results=$(grep -rnP '(?://|#|/\*|\*|<!--)\s*.*(?:0x[0-9a-fA-F]{2}\s*){10,}' "$PROJECT_ROOT" \
-    $EXCLUDE \
+results=$(grep -rnP "${EXCLUDE[@]}" \
     --include="*.js" --include="*.ts" --include="*.py" --include="*.rb" \
     --include="*.go" --include="*.java" --include="*.rs" \
-    2>/dev/null | head -10 || true)
+    -e '(?://|#|/\*|\*|<!--)\s*.*(?:0x[0-9a-fA-F]{2}\s*){10,}' "$PROJECT_ROOT" \
+    2>/dev/null | grep -Ev "$RUTAS_IGNORADAS" | head -10 || true)
 
 if [ -n "$results" ]; then
-    echo "$results" | while IFS= read -r line; do
+    # Here-string en vez de tubería: `echo ... | while` ejecuta el bucle en un
+    # SUBSHELL, así que los incrementos de FINDING_COUNT se perdían y el script
+    # imprimía hallazgos CRITICAL para terminar diciendo "No prompt injection
+    # indicators detected".
+    while IFS= read -r line; do
         file=$(echo "$line" | cut -d: -f1)
         linenum=$(echo "$line" | cut -d: -f2)
         finding "MEDIUM" "Encoded Payload" "$file:$linenum" "Hex-encoded content in comment"
-    done
+    done <<< "$results"
 else
     echo -e "  ${GREEN}✓${NC} No hex-encoded payloads in comments"
 fi

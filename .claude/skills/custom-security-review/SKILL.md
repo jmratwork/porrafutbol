@@ -100,5 +100,6 @@ For each finding:
 
 After presenting the report:
 1. Offer to **auto-fix** CRITICAL and HIGH findings where safe to do so
-2. Offer to **install security hooks** by running `bash scripts/security/install_hooks.sh .`
+2. Offer to **tighten the agent permissions** in `.claude/settings.json` (deny/ask rules).
+   Do NOT offer to run an installer script that is not present in the repository.
 3. Suggest adding the security agents to CI/CD for continuous scanning

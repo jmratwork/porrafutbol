@@ -82,8 +82,8 @@ FIND_PRUNE=(-name .git -o -name node_modules -o -name vendor -o -name __pycache_
 # ── AWS Keys ──
 while IFS=: read -r file line match; do
     [ -n "$file" ] && log_finding "CRITICAL" "$file" "$line" "AWS Access Key" "$match"
-done < <(grep -rnoP -e '(?:AKIA|ABIA|ACCA|ASIA)[0-9A-Z]{16}' "$PROJECT_ROOT" \
-    "${INCLUDES[@]}" "${EXCLUDES[@]}" 2>/dev/null | head -50 || true)
+done < <(grep -rnoP -e '(?:AKIA|ABIA|ACCA|ASIA)[0-9A-Z]{16}' \
+    "${INCLUDES[@]}" "${EXCLUDES[@]}" "$PROJECT_ROOT" 2>/dev/null | head -50 || true)
 
 # ── Private Keys ──
 while IFS=: read -r file line match; do
@@ -94,20 +94,20 @@ done < <(grep -rnoP -e '-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----' 
 # ── Anthropic API Keys ──
 while IFS=: read -r file line match; do
     [ -n "$file" ] && log_finding "CRITICAL" "$file" "$line" "Anthropic API Key" "$match"
-done < <(grep -rnoP -e 'sk-ant-[a-zA-Z0-9_-]{20,}' "$PROJECT_ROOT" \
-    "${INCLUDES[@]}" "${EXCLUDES[@]}" 2>/dev/null | head -50 || true)
+done < <(grep -rnoP -e 'sk-ant-[a-zA-Z0-9_-]{20,}' \
+    "${INCLUDES[@]}" "${EXCLUDES[@]}" "$PROJECT_ROOT" 2>/dev/null | head -50 || true)
 
 # ── OpenAI API Keys ──
 while IFS=: read -r file line match; do
     [ -n "$file" ] && log_finding "CRITICAL" "$file" "$line" "OpenAI API Key" "$match"
-done < <(grep -rnoP -e 'sk-[a-zA-Z0-9]{48,}' "$PROJECT_ROOT" \
-    "${INCLUDES[@]}" "${EXCLUDES[@]}" 2>/dev/null | head -50 || true)
+done < <(grep -rnoP -e 'sk-[a-zA-Z0-9]{48,}' \
+    "${INCLUDES[@]}" "${EXCLUDES[@]}" "$PROJECT_ROOT" 2>/dev/null | head -50 || true)
 
 # ── GitHub Tokens ──
 while IFS=: read -r file line match; do
     [ -n "$file" ] && log_finding "CRITICAL" "$file" "$line" "GitHub Token" "$match"
-done < <(grep -rnoP -e 'gh[pousr]_[A-Za-z0-9_]{36,}' "$PROJECT_ROOT" \
-    "${INCLUDES[@]}" "${EXCLUDES[@]}" 2>/dev/null | head -50 || true)
+done < <(grep -rnoP -e 'gh[pousr]_[A-Za-z0-9_]{36,}' \
+    "${INCLUDES[@]}" "${EXCLUDES[@]}" "$PROJECT_ROOT" 2>/dev/null | head -50 || true)
 
 # ── Database Connection Strings ──
 while IFS=: read -r file line match; do
@@ -117,32 +117,32 @@ while IFS=: read -r file line match; do
         continue
     fi
     [ -n "$file" ] && log_finding "CRITICAL" "$file" "$line" "Database Connection String" "$match"
-done < <(grep -rnoP -e '(?:mongodb(?:\+srv)?|postgres(?:ql)?|mysql|redis|amqp)://[^\s'"'"'"]+:[^\s'"'"'"]+@' "$PROJECT_ROOT" \
-    "${INCLUDES[@]}" "${EXCLUDES[@]}" 2>/dev/null | head -50 || true)
+done < <(grep -rnoP -e '(?:mongodb(?:\+srv)?|postgres(?:ql)?|mysql|redis|amqp)://[^\s'"'"'"]+:[^\s'"'"'"]+@' \
+    "${INCLUDES[@]}" "${EXCLUDES[@]}" "$PROJECT_ROOT" 2>/dev/null | head -50 || true)
 
 # ── Stripe Keys ──
 while IFS=: read -r file line match; do
     [ -n "$file" ] && log_finding "HIGH" "$file" "$line" "Stripe Key" "$match"
-done < <(grep -rnoP -e '[sr]k_(?:live|test)_[A-Za-z0-9]{20,}' "$PROJECT_ROOT" \
-    "${INCLUDES[@]}" "${EXCLUDES[@]}" 2>/dev/null | head -50 || true)
+done < <(grep -rnoP -e '[sr]k_(?:live|test)_[A-Za-z0-9]{20,}' \
+    "${INCLUDES[@]}" "${EXCLUDES[@]}" "$PROJECT_ROOT" 2>/dev/null | head -50 || true)
 
 # ── Slack Tokens ──
 while IFS=: read -r file line match; do
     [ -n "$file" ] && log_finding "HIGH" "$file" "$line" "Slack Token" "$match"
-done < <(grep -rnoP -e 'xox[boaprs]-[0-9a-zA-Z-]{10,}' "$PROJECT_ROOT" \
-    "${INCLUDES[@]}" "${EXCLUDES[@]}" 2>/dev/null | head -50 || true)
+done < <(grep -rnoP -e 'xox[boaprs]-[0-9a-zA-Z-]{10,}' \
+    "${INCLUDES[@]}" "${EXCLUDES[@]}" "$PROJECT_ROOT" 2>/dev/null | head -50 || true)
 
 # ── Google API Keys ──
 while IFS=: read -r file line match; do
     [ -n "$file" ] && log_finding "HIGH" "$file" "$line" "Google API Key" "$match"
-done < <(grep -rnoP -e 'AIza[0-9A-Za-z_-]{35}' "$PROJECT_ROOT" \
-    "${INCLUDES[@]}" "${EXCLUDES[@]}" 2>/dev/null | head -50 || true)
+done < <(grep -rnoP -e 'AIza[0-9A-Za-z_-]{35}' \
+    "${INCLUDES[@]}" "${EXCLUDES[@]}" "$PROJECT_ROOT" 2>/dev/null | head -50 || true)
 
 # ── SendGrid Keys ──
 while IFS=: read -r file line match; do
     [ -n "$file" ] && log_finding "HIGH" "$file" "$line" "SendGrid API Key" "$match"
-done < <(grep -rnoP -e 'SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}' "$PROJECT_ROOT" \
-    "${INCLUDES[@]}" "${EXCLUDES[@]}" 2>/dev/null | head -50 || true)
+done < <(grep -rnoP -e 'SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}' \
+    "${INCLUDES[@]}" "${EXCLUDES[@]}" "$PROJECT_ROOT" 2>/dev/null | head -50 || true)
 
 # ── Generic Password/Secret Assignments ──
 while IFS=: read -r file line match; do
@@ -151,8 +151,8 @@ while IFS=: read -r file line match; do
         continue
     fi
     [ -n "$file" ] && log_finding "HIGH" "$file" "$line" "Hardcoded Secret" "$match"
-done < <(grep -rnoP -e '(?i)(?:api[_-]?key|api[_-]?secret|access[_-]?key|secret[_-]?key|auth[_-]?token|password|passwd)\s*[=:]\s*['"'"'"][A-Za-z0-9+/=_-]{16,}['"'"'"]' "$PROJECT_ROOT" \
-    "${INCLUDES[@]}" "${EXCLUDES[@]}" 2>/dev/null | head -100 || true)
+done < <(grep -rnoP -e '(?i)(?:api[_-]?key|api[_-]?secret|access[_-]?key|secret[_-]?key|auth[_-]?token|password|passwd)\s*[=:]\s*['"'"'"][A-Za-z0-9+/=_-]{16,}['"'"'"]' \
+    "${INCLUDES[@]}" "${EXCLUDES[@]}" "$PROJECT_ROOT" 2>/dev/null | head -100 || true)
 
 # ── .env files present (and, worse, tracked by git) ──
 # We deliberately do NOT read their contents: the project policy in CLAUDE.md
@@ -179,8 +179,8 @@ done < <(grep -rnoP -e '"(?:password|secret|key|token|api_key)":\s*"(?!\$\{)[^"]
 # ── JWT Tokens in source ──
 while IFS=: read -r file line match; do
     [ -n "$file" ] && log_finding "MEDIUM" "$file" "$line" "JWT Token in Source" "$match"
-done < <(grep -rnoP -e 'eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}' "$PROJECT_ROOT" \
-    "${INCLUDES[@]}" "${EXCLUDES[@]}" 2>/dev/null | head -30 || true)
+done < <(grep -rnoP -e 'eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}' \
+    "${INCLUDES[@]}" "${EXCLUDES[@]}" "$PROJECT_ROOT" 2>/dev/null | head -30 || true)
 
 echo
 echo "]"
