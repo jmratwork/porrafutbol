@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Sólo lectura: este workflow no publica nada ni escribe en el repositorio.
+permissions:
+  contents: read
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # npm ci exige que package-lock.json esté en sintonía con package.json,
+      # así que esto ya detecta un lockfile desactualizado.
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Tipos
+        run: npx tsc --noEmit
+
+      # Compila el cliente de Prisma y la aplicación. No necesita base de datos:
+      # todas las rutas son dinámicas (force-dynamic).
+      - name: Build
+        run: npm run build
+
+      # Sólo el árbol de producción: el de desarrollo arrastra un aviso de
+      # braces (vía tailwindcss) sin parche upstream, documentado en el README.
+      - name: Vulnerabilidades en dependencias de producción
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Escaneo de secretos
+        run: bash scripts/security/scan_secrets.sh .
