@@ -386,14 +386,19 @@ base de datos: todas las rutas son dinámicas.
 > y adapta `eslint-config-next` con `FlatCompat` porque ese paquete todavía se
 > publica en el formato antiguo.
 
-> **Aviso sobre `npm audit`.** El árbol de **producción** está limpio; el de
-> desarrollo arrastra un aviso HIGH de `braces` que **no tiene parche upstream**
-> (3.0.3 es la última publicada). Llega por dos caminos —`tailwindcss` y
-> `eslint-config-next`, ambos vía `micromatch`/`chokidar`—, así que **no se
-> arregla cambiando una sola dependencia**. La exposición es mínima: las únicas
-> entradas son tu propio `tailwind.config.ts` y los ficheros del repositorio, no
-> datos de usuario. Se acepta de forma consciente, y por eso el CI comprueba
-> `npm audit --omit=dev`, que sí debe estar en cero.
+> **Aviso sobre `npm audit`.** El árbol de **producción** debe estar en **cero**, y es lo
+> que comprueba el CI. El de desarrollo arrastra dos avisos que vienen de
+> `tailwindcss` 3 y sólo se cierran migrando a Tailwind 4 (cambio mayor):
+>
+> - `braces` (**high**): sin parche upstream, 3.0.3 es la última publicada. Llega
+>   por `tailwindcss` y por `eslint-config-next`, vía `micromatch`/`chokidar`.
+> - `postcss-selector-parser` (**moderate**): el arreglo está en 7.1.6, pero
+>   Tailwind 3 exige `^6.1.2`, así que no se puede forzar con un `override`.
+>
+> La exposición es mínima: las únicas entradas son tu propio `tailwind.config.ts`
+> y los ficheros del repositorio, nunca datos de usuario. Se aceptan de forma
+> consciente. Si algún día aparece un aviso en **producción**, `npm audit fix`
+> suele bastar: así se cerró el de `source-map-js` (high, vía `postcss`).
 
 ## Nota
 
