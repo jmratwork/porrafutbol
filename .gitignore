@@ -1,21 +1,21 @@
-# dependencies
+# dependencias
 /node_modules
 
 # next.js
 /.next/
 /out/
 
-# production
+# producción
 /build
 
-# misc
+# varios
 .DS_Store
 *.pem
 
-# debug
+# depuración
 npm-debug.log*
 
-# local env files
+# variables de entorno locales
 .env
 .env.*
 !.env.example
@@ -27,8 +27,7 @@ next-env.d.ts
 # prisma
 /prisma/*.db
 
-# herramientas locales de agentes de IA y auditoría: se quedan fuera del
-# control de versiones a propósito.
+# herramientas locales y auditoría
 /CLAUDE.md
 /.claude/
 /scripts/security/
