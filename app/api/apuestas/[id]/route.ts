@@ -101,10 +101,24 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   try {
-    await prisma.apuesta.update({
-      where: { id: apuesta.id },
+    // La condición de estado va en el propio UPDATE, no sólo en la comprobación
+    // de arriba: entre leer la apuesta y escribirla, el organizador puede haber
+    // cerrado la porra o haber llegado la hora del partido, y la escritura
+    // habría entrado igual. Si no actualiza ninguna fila, es que la ventana se
+    // cerró en ese hueco.
+    const { count } = await prisma.apuesta.updateMany({
+      where: {
+        id: apuesta.id,
+        porra: { estado: "ABIERTA", fechaPartido: { gt: new Date() } },
+      },
       data: { golesLocal: vLocal.data, golesVisitante: vVis.data },
     });
+    if (count === 0) {
+      return NextResponse.json(
+        { error: "La porra ya no admite cambios (cerrada o el partido ya ha comenzado)." },
+        { status: 409 },
+      );
+    }
   } catch (e) {
     console.error("PATCH /api/apuestas/[id]", e);
     return NextResponse.json({ error: "No se pudo actualizar la apuesta." }, { status: 500 });
@@ -174,7 +188,22 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   }
 
   try {
-    await prisma.apuesta.delete({ where: { id: apuesta.id } });
+    // Igual que en PATCH, la condición de estado viaja en el propio DELETE para
+    // que no se cuele un borrado en el hueco entre la lectura y la escritura.
+    // El admin puede borrar con la porra cerrada, pero no si está finalizada;
+    // el dueño, sólo mientras siga admitiendo apuestas.
+    const condicion = esAdmin
+      ? { estado: { not: "FINALIZADA" as const } }
+      : { estado: "ABIERTA" as const, fechaPartido: { gt: new Date() } };
+    const { count } = await prisma.apuesta.deleteMany({
+      where: { id: apuesta.id, porra: condicion },
+    });
+    if (count === 0) {
+      return NextResponse.json(
+        { error: "La porra ya no admite cambios (cerrada, finalizada o el partido ya ha comenzado)." },
+        { status: 409 },
+      );
+    }
   } catch (e) {
     console.error("DELETE /api/apuestas/[id]", e);
     return NextResponse.json({ error: "No se pudo borrar la apuesta." }, { status: 500 });

@@ -26,6 +26,10 @@ export function middleware(request: NextRequest) {
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
+    // Convierte en HTTPS cualquier petición http:// que se cuele (un enlace
+    // antiguo, una imagen pegada): evita el aviso de contenido mixto y que algo
+    // viaje en claro.
+    "upgrade-insecure-requests",
   ].join("; ");
 
   // Next.js lee el nonce de la CSP en las cabeceras de la PETICIÓN.

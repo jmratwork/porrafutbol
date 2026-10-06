@@ -24,6 +24,22 @@ const nextConfig = {
           },
         ],
       },
+      {
+        // Nada de lo que hay detrás de la sesión de administración ni de la API
+        // debe quedar en una caché compartida (proxys, CDN, botón "atrás"):
+        // incluye el estado de la porra y, en el panel, los enlaces de
+        // invitación firmados.
+        source: "/api/:path*",
+        headers: [{ key: "Cache-Control", value: "no-store" }],
+      },
+      {
+        source: "/admin/:path*",
+        headers: [{ key: "Cache-Control", value: "no-store" }],
+      },
+      {
+        source: "/admin",
+        headers: [{ key: "Cache-Control", value: "no-store" }],
+      },
     ];
   },
 };

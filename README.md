@@ -154,7 +154,10 @@ npx prisma generate       # genera el cliente (también lo hace el build)
 npx prisma migrate deploy # aplica las migraciones incluidas a la base de datos
 ```
 
-> Alternativa rápida sin historial de migraciones: `npx prisma db push`.
+> Alternativa rápida sin historial de migraciones, **sólo en desarrollo**:
+> `npm run db:push`. El script se niega a ejecutarse si detecta `VERCEL` o
+> `NODE_ENV=production`, porque `prisma db push` se salta el historial de
+> migraciones y puede destruir datos. Para producción, `npm run db:migrate`.
 
 ### 4. Arrancar en desarrollo
 
@@ -223,12 +226,23 @@ Cualquiera de estas opciones funciona; copia su cadena de conexión en `DATABASE
 | DELETE | `/api/porra`    | Reiniciar (borra porra y apuestas). Si el cuerpo trae la porra siguiente, se **valida antes** de borrar nada y ambas operaciones van en una transacción. | Sesión |
 | POST   | `/api/invitaciones` | Generar enlaces de invitación (`{ nombres: string[] }`); **409** si la porra está cerrada, empezada o llena. | Sesión |
 | POST   | `/api/apuestas` | Crear una apuesta (requiere **invitación** + marcador). Devuelve un código secreto; **409** si está completa, cerrada, el nombre ya existe o dos envíos chocaron. | Invitación |
-| PATCH  | `/api/apuestas/:id` | Editar el marcador de una apuesta (requiere su código); **429** al agotar los intentos. | Código |
-| DELETE | `/api/apuestas/:id` | Borrar una apuesta (código de su dueño **o** sesión de admin). | Código/Sesión |
+| PATCH  | `/api/apuestas/:id` | Editar el marcador de una apuesta (requiere su código); **429** al agotar los intentos y **409** si la porra deja de admitir cambios. | Código |
+| DELETE | `/api/apuestas/:id` | Borrar una apuesta (código de su dueño **o** sesión de admin); **409** si la porra ya no admite cambios —el admin sí puede con ella cerrada, nunca finalizada—. | Código/Sesión |
 
 Las rutas marcadas **Sesión** exigen la cookie de administración emitida por `/api/admin/login`
 tras el doble factor; sin ella responden **401**. Si la porra está completa o cerrada al apostar,
 responde **409**.
+
+**Valores aceptados** (todo lo que quede fuera responde **400**):
+
+| Campo | Límite |
+| --- | --- |
+| `golesLocal`, `golesVisitante`, `resultadoLocal`, `resultadoVisitante` | entero de **0 a 20**. Como cadena, sólo dígitos: `""`, `" 5 "`, `"0x10"` y `"1e1"` se rechazan |
+| `precio` | de **0,01 €** a **10 000 €**, dos decimales como máximo (se admite la coma: `"0,50"`) |
+| `nombre`, `equipoLocal`, `equipoVisitante` | 1 a **40** caracteres (se recorta el espacio sobrante) |
+| `fechaPartido` | `YYYY-MM-DDTHH:mm` interpretado como **hora de Barcelona**, o una cadena ISO con zona |
+| `nombres` (invitaciones) | hasta **100** por petición, deduplicados |
+| apuestas por porra | **20** como máximo |
 
 **Cierre automático**: las apuestas se cierran solas al llegar la **hora de inicio del
 partido**, aunque el organizador no la cierre a mano. A partir de ese momento la API
@@ -306,7 +320,7 @@ app/
   admin/page.tsx            # Panel de administración
   layout.tsx, globals.css
 middleware.ts               # CSP basada en nonce por petición
-next.config.mjs             # Cabeceras de seguridad estáticas (HSTS, COOP/CORP…)
+next.config.mjs             # Cabeceras estáticas (HSTS, COOP/CORP, no-store en /admin y /api…)
 eslint.config.mjs           # ESLint 9 (flat) con las reglas de Next
 components/                 # Marcador, Escudo, CuentaAtras, Toast
 lib/

@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate deploy",
-    "db:push": "prisma db push",
+    "db:push": "node -e \"if (process.env.VERCEL || process.env.NODE_ENV === 'production') { console.error('db:push esta bloqueado fuera de desarrollo: usa db:migrate.'); process.exit(1) }\" && prisma db push",
     "totp:setup": "node scripts/totp-setup.mjs"
   },
   "dependencies": {

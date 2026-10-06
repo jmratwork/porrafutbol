@@ -25,7 +25,11 @@ export function cuerpoComoObjeto(valor: unknown): Record<string, unknown> {
  * Valida que un valor sea un entero dentro de [MIN_GOLES, MAX_GOLES].
  */
 export function validarGoles(valor: unknown, etiqueta: string): ResultadoValidacion<number> {
-  const n = typeof valor === "string" ? Number(valor) : valor;
+  // Number("") y Number("   ") son 0, así que una cadena vacía colaba como
+  // "cero goles": un formulario a medio enviar registraba un 0-0 silencioso, y
+  // en el resultado del admin eso finaliza la porra con un marcador falso. Se
+  // exigen dígitos explícitos; también quedan fuera "0x10", "1e1" y " 5 ".
+  const n = typeof valor === "string" ? (/^\d{1,2}$/.test(valor) ? Number(valor) : NaN) : valor;
   if (typeof n !== "number" || !Number.isFinite(n)) {
     return { ok: false, error: `Los goles de ${etiqueta} deben ser un número.` };
   }
@@ -104,16 +108,28 @@ export function validarPorra(body: Record<string, unknown>): ResultadoValidacion
     return { ok: false, error: "La fecha y hora del partido no son válidas." };
   }
 
-  const precioNum = typeof body.precio === "string" ? Number(body.precio) : body.precio;
+  // Igual que en los goles: dígitos explícitos, con dos decimales como máximo y
+  // admitiendo la coma como separador. Antes `Number()` aceptaba "" (→ 0),
+  // "0x10" (→ 16) y "1e-9", y el límite inferior era `> 0`, de modo que un
+  // precio de 0,001 € pasaba la validación y redondeaba el bote a 0 €.
+  const precioRaw = typeof body.precio === "string" ? body.precio.trim().replace(",", ".") : body.precio;
+  const precioNum =
+    typeof precioRaw === "string"
+      ? (/^\d+(\.\d{1,2})?$/.test(precioRaw) ? Number(precioRaw) : NaN)
+      : precioRaw;
   if (
     typeof precioNum !== "number" ||
     !Number.isFinite(precioNum) ||
-    precioNum <= 0 ||
-    precioNum > MAX_PRECIO
+    precioNum < 0.01 ||
+    precioNum > MAX_PRECIO ||
+    // Dos decimales como máximo. Se compara el valor redondeado, no el producto
+    // por 100: 0.07 * 100 da 7.000000000000001 en coma flotante y rechazaría un
+    // precio perfectamente válido.
+    Math.round(precioNum * 100) / 100 !== precioNum
   ) {
     return {
       ok: false,
-      error: `El precio debe ser un número entre 0,01 € y ${MAX_PRECIO} €.`,
+      error: `El precio debe ser un número entre 0,01 € y ${MAX_PRECIO} €, con dos decimales como máximo.`,
     };
   }
 
