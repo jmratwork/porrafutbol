@@ -365,11 +365,14 @@ bash scripts/security/scan_secrets.sh .
 bash scripts/security/scan_prompt_injection.sh .
 ```
 
-> **Aviso sobre `npm audit`.** El árbol de **producción** está limpio, pero el de
-> desarrollo arrastra un aviso HIGH de `braces` (a través de `tailwindcss`) que
-> **no tiene parche upstream**: la única salida sería migrar a Tailwind 4. La
-> exposición es mínima —la única entrada es tu propio `tailwind.config.ts`— así
-> que se acepta de forma consciente, y por eso el CI comprueba `--omit=dev`.
+> **Aviso sobre `npm audit`.** El árbol de **producción** está limpio; el de
+> desarrollo arrastra un aviso HIGH de `braces` que **no tiene parche upstream**
+> (3.0.3 es la última publicada). Llega por dos caminos —`tailwindcss` y
+> `eslint-config-next`, ambos vía `micromatch`/`chokidar`—, así que **no se
+> arregla cambiando una sola dependencia**. La exposición es mínima: las únicas
+> entradas son tu propio `tailwind.config.ts` y los ficheros del repositorio, no
+> datos de usuario. Se acepta de forma consciente, y por eso el CI comprueba
+> `npm audit --omit=dev`, que sí debe estar en cero.
 
 ## Nota
 
