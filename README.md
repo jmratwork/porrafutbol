@@ -397,8 +397,14 @@ base de datos: todas las rutas son dinámicas.
 >
 > La exposición es mínima: las únicas entradas son tu propio `tailwind.config.ts`
 > y los ficheros del repositorio, nunca datos de usuario. Se aceptan de forma
-> consciente. Si algún día aparece un aviso en **producción**, `npm audit fix`
-> suele bastar: así se cerró el de `source-map-js` (high, vía `postcss`).
+> consciente.
+>
+> **Cuando el CI falle por este paso**, suele ser un aviso nuevo en producción, no
+> un error tuyo: `npm audit fix` basta para los transitivos, y si el aviso es de
+> `next` hay que subir la versión fijada en `package.json`. Ha pasado dos veces:
+> `source-map-js` (high, vía `postcss`) y, después, `next` ≤15.5.27 (**critical**:
+> envenenamiento de caché en SSG/ISR, RCE en la API de optimización de imágenes
+> con SVG) junto a `sharp` <0.35.5.
 
 ## Nota
 
